@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: isp-tracker-db
@@ -12,21 +13,40 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - tracker_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tracker_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # FastAPI Backend
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: isp-tracker-api
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-tracker_user}:${DB_PASSWORD:-secure_password}@postgres:5432/${DB_NAME:-isp_tracker}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-    environment:
-      DATABASE_URL: postgresql://${DB_USER:-tracker_user}:${DB_PASSWORD:-secure_password}@postgres:5432/${DB_NAME:-isp_tracker}
+      postgres:
+        condition: service_healthy
     volumes:
       - ./backend:/app
+    networks:
+      - tracker_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  # Frontend (React)
   frontend:
     build:
       context: ./frontend
@@ -38,6 +58,41 @@ services:
       - backend
     volumes:
       - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - tracker_network
+    environment:
+      VITE_API_URL: http://backend:8000
+
+  # Traccar (GPS Tracking Engine)
+  traccar:
+    image: traccar/traccar:latest
+    container_name: isp-tracker-traccar
+    ports:
+      - "8082:8082"
+      - "5005:5005"
+      - "5055:5055"
+      - "5067:5067"
+      - "6046:6046"
+    volumes:
+      - traccar_data:/opt/traccar/data
+      - traccar_conf:/opt/traccar/conf
+    networks:
+      - tracker_network
+    environment:
+      - database.driver=org.postgresql.Driver
+      - database.url=jdbc:postgresql://postgres:5432/${DB_NAME:-isp_tracker}
+      - database.user=${DB_USER:-tracker_user}
+      - database.password=${DB_PASSWORD:-secure_password}
 
 volumes:
   postgres_data:
+    driver: local
+  traccar_data:
+    driver: local
+  traccar_conf:
+    driver: local
+
+networks:
+  tracker_network:
+    driver: bridge
