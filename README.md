@@ -1,5 +1,3 @@
-teste
-
 # ISP Tracker Platform 🚀
 
 Plataforma corporativa de rastreamento e inteligência operacional para equipes técnicas externas de provedores de internet.
