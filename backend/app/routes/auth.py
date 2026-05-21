@@ -1,3 +1,4 @@
+## backend/app/routes/auth.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -5,6 +6,7 @@ from app.schemas.user import UserCreate, UserLogin, TokenResponse, UserResponse
 from app.services.auth_service import AuthService
 from app.utils.jwt import get_user_from_token, verify_token
 import logging
+from app.services.logout_service import LogoutService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -96,3 +98,30 @@ async def get_current_user(
         )
     
     return user
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    authorization: str = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Fazer logout (revogar token atual)
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token não fornecido",
+        )
+    
+    token = authorization.split(" ")[1]
+    
+    # Revogar token
+    success = await LogoutService.revoke_token(db, token)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+        )
+    
+    return {"message": "Logout realizado com sucesso"}
