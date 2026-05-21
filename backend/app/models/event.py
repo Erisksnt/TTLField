@@ -24,7 +24,7 @@ class Event(Base):
     description = Column(Text, nullable=True)
     
     # Dados contextuais
-    metadata = Column(JSON, nullable=True)
+    extra_data = Column(JSON, nullable=True)
     
     # Timestamps
     event_timestamp = Column(DateTime, nullable=False, index=True)

@@ -33,7 +33,7 @@ class Alert(Base):
     acknowledged_by = Column(String, nullable=True)
     
     # Dados adicionais
-    metadata = Column(JSON, nullable=True)
+    extra_data = Column(JSON, nullable=True)
     
     # Timestamps
     triggered_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)

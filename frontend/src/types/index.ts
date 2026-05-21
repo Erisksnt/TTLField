@@ -14,6 +14,7 @@ export interface Technician {
   id: string
   name: string
   employee_id: string
+  cpf?: string
   email?: string
   phone?: string
   is_active: boolean
@@ -67,6 +68,11 @@ export interface Alert {
   alert_type: string
   title: string
   description?: string
+
+  metadata?: {
+    [key: string]: unknown
+  }
+
   severity: 'low' | 'medium' | 'high' | 'critical'
   is_active: boolean
   is_acknowledged: boolean
@@ -107,6 +113,7 @@ export interface MapLocation {
 }
 
 export interface RouteData {
+  cpf?: string;
   technician_id: string
   distance_km: number
   start_datetime: string

@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, Float, DateTime, Integer, ForeignKey, Ind
 from datetime import datetime
 from app.database import Base
 import uuid
+from sqlalchemy import Boolean
 
 
 class Position(Base):
@@ -41,7 +42,7 @@ class Position(Base):
     received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Qualidade de sinal
-    is_valid = Column(bool, default=True)
+    is_valid = Column(Boolean, default=True)
     
     def __repr__(self) -> str:
         return f"<Position id={self.id} tech={self.technician_id} lat={self.latitude} lon={self.longitude}>"

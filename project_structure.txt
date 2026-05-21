@@ -1,0 +1,82 @@
+isp-tracker-platform/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py
+│   │   │   ├── technician.py
+│   │   │   ├── device.py
+│   │   │   ├── position.py
+│   │   │   ├── geofence.py
+│   │   │   ├── alert.py
+│   │   │   └── event.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── user.py
+│   │   │   ├── technician.py
+│   │   │   ├── position.py
+│   │   │   ├── geofence.py
+│   │   │   └── alert.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── technicians.py
+│   │   │   ├── devices.py
+│   │   │   ├── positions.py
+│   │   │   ├── geofences.py
+│   │   │   └── alerts.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth_service.py
+│   │   │   ├── tracking_service.py
+│   │   │   ├── geofence_service.py
+│   │   │   └── alert_service.py
+│   │   ├── websocket/
+│   │   │   ├── __init__.py
+│   │   │   ├── manager.py
+│   │   │   └── handlers.py
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       ├── jwt.py
+│   │       └── security.py
+│   ├── tests/
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── types/
+│   │   ├── store/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── public/
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   └── Dockerfile
+├── mobile/
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── config/
+│   │   ├── models/
+│   │   ├── services/
+│   │   ├── screens/
+│   │   ├── widgets/
+│   │   └── providers/
+│   ├── pubspec.yaml
+│   └── android/
+├── docker-compose.yml
+├── .env.example
+├── README.md
+└── docs/
+    ├── ARCHITECTURE.md
+    ├── API.md
+    └── SETUP.md

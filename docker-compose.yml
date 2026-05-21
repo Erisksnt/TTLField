@@ -13,11 +13,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+      #- ./backend/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - tracker_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tracker_user}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tracker_user} -d ${DB_NAME:-isp_tracker}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,7 +29,7 @@ services:
       dockerfile: Dockerfile
     container_name: isp-tracker-api
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-tracker_user}:${DB_PASSWORD:-secure_password}@postgres:5432/${DB_NAME:-isp_tracker}
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-tracker_user}:${DB_PASSWORD:-secure_password}@postgres:5432/${DB_NAME:-isp_tracker}
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile
     container_name: isp-tracker-dashboard
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
       - backend
     volumes:
@@ -62,7 +62,7 @@ services:
     networks:
       - tracker_network
     environment:
-      VITE_API_URL: http://backend:8000
+      VITE_API_URL: http://localhost:8000
 
   # Traccar (GPS Tracking Engine)
   traccar:
