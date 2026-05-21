@@ -1,3 +1,4 @@
+## backend/app/services/auth_service.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.user import User
@@ -62,9 +63,16 @@ class AuthService:
                 detail="Usuário inativo",
             )
         
-        # Gerar tokens
-        access_token = create_access_token(data={"sub": user.id, "email": user.email})
-        refresh_token = create_refresh_token(data={"sub": user.id})
+        # Gerar tokens (CORRIGIDO)
+        access_token = create_access_token(
+            data={
+                "sub": str(user.id),
+                "email": user.email,
+                "role": user.role
+            },
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+        )
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
         
         return TokenResponse(
             access_token=access_token,
@@ -86,9 +94,16 @@ class AuthService:
                 detail="Usuário não encontrado ou inativo",
             )
         
-        # Gerar novo access token
-        access_token = create_access_token(data={"sub": user.id, "email": user.email})
-        refresh_token = create_refresh_token(data={"sub": user.id})
+        # Gerar novo access token (CORRIGIDO)
+        access_token = create_access_token(
+            data={
+                "sub": str(user.id),
+                "email": user.email,
+                "role": user.role
+            },
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+        )
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
         
         return TokenResponse(
             access_token=access_token,
