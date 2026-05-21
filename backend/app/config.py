@@ -1,3 +1,4 @@
+## backend/app/config.py
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
@@ -23,10 +24,14 @@ class Settings(BaseSettings):
     jwt_expiration_hours: int = 24
     
     # CORS
-    cors_origins: list = ["*"]
+    cors_origins: list = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+    ]
     cors_credentials: bool = True
-    cors_methods: list = ["*"]
-    cors_headers: list = ["*"]
+    cors_methods: list = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    cors_headers: list = ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"]
     
     # Traccar
     traccar_url: str = "http://localhost:8082"
