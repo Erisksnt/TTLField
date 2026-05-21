@@ -1,3 +1,4 @@
+// frontend/src/services/api.ts
 import axios, { AxiosInstance } from 'axios'
 import { TokenResponse, User, Technician, Position, Geofence, Alert } from '@/types'
 
@@ -60,6 +61,18 @@ class ApiService {
     const response = await this.api.post<TokenResponse>('/auth/refresh', {
       refresh_token: refreshToken,
     })
+    return response.data
+  }
+
+  // NOVO: Obter usuário atual
+  async getCurrentUser(): Promise<User> {
+    const response = await this.api.get<User>('/auth/me')
+    return response.data
+  }
+
+  // NOVO: Logout (revoga o token)
+  async logout(): Promise<{ message: string }> {
+    const response = await this.api.post('/auth/logout')
     return response.data
   }
 

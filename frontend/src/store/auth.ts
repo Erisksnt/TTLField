@@ -1,8 +1,9 @@
+// frontend/src/store/auth.ts
 import { create } from 'zustand'
 import { AuthState, User } from '@/types'
 import api from '@/services/api'
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: localStorage.getItem('access_token'),
   refreshToken: localStorage.getItem('refresh_token'),
@@ -16,7 +17,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem('access_token', response.access_token)
       localStorage.setItem('refresh_token', response.refresh_token)
 
+      // Buscar dados do usuário após login
+      const user = await api.getCurrentUser()
+      
       set({
+        user: user,
         token: response.access_token,
         refreshToken: response.refresh_token,
         isAuthenticated: true,
@@ -29,6 +34,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    // Chamar API de logout (opcional)
+    api.logout().catch(() => {})
+    
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     set({
@@ -51,5 +59,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       refreshToken: refresh,
       isAuthenticated: true,
     })
+  },
+
+  // NOVA FUNÇÃO: Verificar e renovar token
+  checkAuth: async () => {
+    const token = get().token
+    if (!token) {
+      return false
+    }
+
+    try {
+      const user = await api.getCurrentUser()
+      set({ user: user, isAuthenticated: true })
+      return true
+    } catch (error) {
+      // Token expirado ou inválido
+      get().logout()
+      return false
+    }
   },
 }))
