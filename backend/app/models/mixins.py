@@ -19,4 +19,3 @@ class SoftDeleteMixin:
     def is_deleted(self) -> bool:
         """Verificar se está deletado"""
         return self.deleted_at is not None
-EOF

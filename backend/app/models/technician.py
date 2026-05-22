@@ -1,11 +1,12 @@
+## backend/app/models/technician.py
 from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
-import uuid
+from app.models.mixins import SoftDeleteMixin 
 
 
-class Technician(Base):
+class Technician(Base, SoftDeleteMixin): 
     __tablename__ = "technicians"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -35,6 +36,9 @@ class Technician(Base):
     
     # Notas
     notes = Column(Text, nullable=True)
+    
+    # Soft delete (vem do mixin, mas explícito para clareza)
+    # deleted_at = Column(DateTime, nullable=True)  # Já está no SoftDeleteMixin
     
     # Relacionamentos
     # device = relationship("Device", back_populates="technician")
