@@ -154,10 +154,11 @@ export default function GeofencesPage() {
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition"
+            className="flex items-center gap-1 md:gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base"
           >
-            <Plus size={20} />
-            Novo Geofence
+            <Plus size={16} className="md:w-5 md:h-5" />
+            <span className="hidden sm:inline">Novo Geofence</span>
+            <span className="sm:hidden">Novo</span>
           </button>
         </div>
 

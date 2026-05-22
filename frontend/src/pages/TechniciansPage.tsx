@@ -129,10 +129,11 @@ export default function TechniciansPage() {
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition"
+            className="flex items-center gap-1 md:gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base"
           >
-            <Plus size={20} />
-            Novo Técnico
+            <Plus size={16} className="md:w-5 md:h-5" />
+            <span className="hidden sm:inline">Novo Técnico</span>
+            <span className="sm:hidden">Novo</span>
           </button>
         </div>
 
@@ -174,10 +175,10 @@ export default function TechniciansPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-gray-600 text-sm">Total de Técnicos</p>
-            <p className="text-3xl font-bold text-gray-900 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+          <div className="bg-white rounded-lg shadow p-3 md:p-4">
+            <p className="text-gray-600 text-xs md:text-sm">Total de Técnicos</p>
+            <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-1 md:mt-2">
               {technicians.length}
             </p>
           </div>

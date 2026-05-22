@@ -199,19 +199,14 @@ export default function AlertsPage() {
             <div className="flex gap-2">
               {(['active', 'acknowledged', 'all'] as const).map((type) => (
                 <button
-                  key={type}
                   onClick={() => setFilterType(type)}
-                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                  className={`px-2 md:px-4 py-1 md:py-2 rounded-lg font-medium transition text-sm md:text-base ${
                     filterType === type
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
-                  {type === 'active'
-                    ? 'Ativos'
-                    : type === 'acknowledged'
-                      ? 'Reconhecidos'
-                      : 'Todos'}
+                  {type === 'active' ? 'Ativos' : type === 'acknowledged' ? 'Reconhecidos' : 'Todos'}
                 </button>
               ))}
             </div>

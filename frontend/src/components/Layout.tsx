@@ -1,4 +1,5 @@
-import { ReactNode, useState } from 'react'
+// frontend/src/components/Layout.tsx (versão responsiva)
+import { ReactNode, useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
 import {
@@ -9,6 +10,7 @@ import {
   AlertCircle,
   MapPin,
   LogOut,
+  ChevronLeft,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -19,7 +21,23 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const logout = useAuthStore((state) => state.logout)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false) // Começa fechado no mobile
+  const [isMobile, setIsMobile] = useState(false)
+
+  // Detectar mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(true) // Desktop: sidebar aberta
+      } else {
+        setSidebarOpen(false) // Mobile: sidebar fechada
+      }
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -37,10 +55,18 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="flex h-screen bg-gray-100">
+      {/* Overlay para mobile quando sidebar está aberta */}
+      {sidebarOpen && isMobile && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-20"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className={`bg-gray-900 text-white transition-all duration-300 ${
-          sidebarOpen ? 'w-64' : 'w-20'
+        className={`fixed md:relative z-30 bg-gray-900 text-white transition-all duration-300 h-full ${
+          sidebarOpen ? 'w-64' : 'w-0 md:w-20 overflow-hidden'
         }`}
       >
         <div className="p-4 flex items-center justify-between">
@@ -49,7 +75,7 @@ export default function Layout({ children }: LayoutProps) {
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1 hover:bg-gray-800 rounded"
+            className="p-1 hover:bg-gray-800 rounded ml-auto"
           >
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -62,11 +88,12 @@ export default function Layout({ children }: LayoutProps) {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => isMobile && setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${
                   isActive(item.path)
                     ? 'bg-blue-600'
                     : 'hover:bg-gray-800'
-                }`}
+                } ${!sidebarOpen && 'justify-center px-2'}`}
               >
                 <Icon size={20} />
                 {sidebarOpen && <span>{item.label}</span>}
@@ -90,21 +117,30 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="bg-white border-b border-gray-200 shadow-sm px-8 py-4 flex items-center justify-between">
-          <div className="text-gray-700">
-            <h2 className="text-lg font-semibold">ISP Tracker Platform</h2>
+        {/* Top Bar - Responsivo */}
+        <header className="bg-white border-b border-gray-200 shadow-sm px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Botão menu mobile */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="text-gray-700">
+              <h2 className="text-base md:text-lg font-semibold">ISP Tracker Platform</h2>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Administrator</span>
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
+          <div className="flex items-center gap-2 md:gap-4">
+            <span className="text-xs md:text-sm text-gray-600 hidden sm:inline">Administrator</span>
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm md:text-base">
               A
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto p-8">
+        {/* Page Content - Responsivo */}
+        <main className="flex-1 overflow-auto p-3 md:p-8">
           {children}
         </main>
       </div>

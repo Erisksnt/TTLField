@@ -69,10 +69,10 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={() => fetchTechnicians()}
-            className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition"
-            title="Recarregar"
+            className="flex items-center gap-1 md:gap-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base"
           >
-            <RefreshCw size={20} />
+            <RefreshCw size={14} className="md:w-4 md:h-4" />
+            <span className="hidden sm:inline">Recarregar</span>
           </button>
         </div>
 
