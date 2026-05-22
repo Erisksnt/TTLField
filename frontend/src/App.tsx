@@ -9,6 +9,8 @@ import TechniciansPage from '@/pages/TechniciansPage'
 import AlertsPage from '@/pages/AlertsPage'
 import GeofencesPage from '@/pages/GeofencesPage'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import 'leaflet/dist/leaflet.css'
+import './index.css'
 
 function App() {
   const { isAuthenticated, checkAuth } = useAuthStore()
