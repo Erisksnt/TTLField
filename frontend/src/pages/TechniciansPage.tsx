@@ -5,6 +5,7 @@ import Layout from '@/components/Layout'
 import api from '@/services/api'
 import { Technician } from '@/types'
 import toast from 'react-hot-toast'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 interface FormData {
   name: string
@@ -198,7 +199,7 @@ export default function TechniciansPage() {
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center">
-              <p className="text-gray-600">Carregando técnicos...</p>
+              <LoadingSpinner size="md" message="Carregando técnicos..." />
             </div>
           ) : filteredTechnicians.length === 0 ? (
             <div className="p-8 text-center">
