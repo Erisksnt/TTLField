@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.database import init_db, close_db, get_db
 from app.routes import auth, technicians, positions
 from app.services.logout_service import LogoutService
+from app.utils.rate_limit import setup_rate_limit, limiter
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +47,9 @@ app = FastAPI(
     description="Platform de rastreamento e inteligência operacional para ISP",
     lifespan=lifespan,
 )
+
+# Configurar Rate Limiting
+setup_rate_limit(app)
 
 # CORS middleware
 app.add_middleware(

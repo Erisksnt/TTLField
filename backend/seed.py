@@ -4,6 +4,7 @@ from app.models import User
 from app.utils.security import hash_password
 from app.config import get_settings
 import uuid
+import logging
 
 settings = get_settings()
 
@@ -22,9 +23,10 @@ async def seed_admin_user():
         admin = result.scalar_one_or_none()
         
         if admin:
-            print("✅ Admin user já existe!")
+            logger = logging.getLogger(__name__)
+            logger.info("Admin user already exists!")
             return
-        
+
         admin_user = User(
             id=str(uuid.uuid4()),
             email="admin@example.com",

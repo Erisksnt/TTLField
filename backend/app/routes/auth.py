@@ -1,19 +1,22 @@
 ## backend/app/routes/auth.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.schemas.user import UserCreate, UserLogin, TokenResponse, UserResponse
+from app.schemas.user import UserCreate, UserLogin, TokenResponse
 from app.services.auth_service import AuthService
 from app.utils.jwt import get_user_from_token, verify_token
-import logging
 from app.services.logout_service import LogoutService
+from app.utils.rate_limit import limiter
+import logging
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/hour")
 async def register(
+    request: Request,
     user_create: UserCreate,
     db: AsyncSession = Depends(get_db),
 ):
@@ -32,7 +35,9 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -98,6 +103,7 @@ async def get_current_user(
         )
     
     return user
+
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
