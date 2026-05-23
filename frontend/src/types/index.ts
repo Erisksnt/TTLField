@@ -100,6 +100,7 @@ export interface AuthState {
   logout: () => void
   setUser: (user: User) => void
   setTokens: (access: string, refresh: string) => void
+  checkAuth: () => Promise<boolean>
 }
 
 export interface MapLocation {

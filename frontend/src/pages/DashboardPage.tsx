@@ -46,14 +46,14 @@ export default function DashboardPage() {
   }
 
   // Calcular posição central baseada nos técnicos ou fallback
-  const centerPosition = (() => {
+  const centerPosition: [number, number] = (() => {
     const onlineWithLocation = technicians.filter(t => t.latitude && t.longitude && t.is_online)
     if (onlineWithLocation.length > 0) {
       const avgLat = onlineWithLocation.reduce((sum, t) => sum + (t.latitude || 0), 0) / onlineWithLocation.length
       const avgLng = onlineWithLocation.reduce((sum, t) => sum + (t.longitude || 0), 0) / onlineWithLocation.length
-      return [avgLat, avgLng] as [number, number]
+      return [avgLat, avgLng]
     }
-    return [-23.55, -46.63] // São Paulo como fallback
+    return [-23.55, -46.63]
   })()
 
   const onlineTechnicians = technicians.filter(t => t.is_online)

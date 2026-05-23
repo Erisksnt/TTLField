@@ -61,7 +61,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     })
   },
 
-  // NOVA FUNÇÃO: Verificar e renovar token
   checkAuth: async () => {
     const token = get().token
     if (!token) {
@@ -78,4 +77,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false
     }
   },
+  
 }))
