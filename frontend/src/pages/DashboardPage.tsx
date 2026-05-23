@@ -6,6 +6,14 @@ import Layout from '@/components/Layout'
 import api from '@/services/api'
 import { Technician } from '@/types'
 import { Loader, MapPin, AlertCircle, RefreshCw } from 'lucide-react'
+import { useWebSocket } from '@/hooks/useWebSocket'
+
+interface PositionData {
+  latitude: number
+  longitude: number
+  speed?: number
+  battery_level?: number
+}
 
 const customIcon = new Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
@@ -20,11 +28,12 @@ export default function DashboardPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [mapError, setMapError] = useState(false)
-  const [mapKey, setMapKey] = useState(0) // Para forçar recarga do mapa
+  const [mapKey, setMapKey] = useState(0)
+  const { lastPosition } = useWebSocket()
 
   const fetchTechnicians = async () => {
     try {
-      const data = await api.getTechnicians(true) // Apenas online
+      const data = await api.getTechnicians(true)
       setTechnicians(data)
     } catch (error) {
       console.error('Erro ao carregar técnicos:', error)
@@ -33,19 +42,28 @@ export default function DashboardPage() {
     }
   }
 
+  // Carregar técnicos ao iniciar
   useEffect(() => {
     fetchTechnicians()
-    const interval = setInterval(fetchTechnicians, 10000) // Atualizar a cada 10s
-
-    return () => clearInterval(interval)
   }, [])
+
+  // Atualizar posições via WebSocket
+  useEffect(() => {
+    Object.entries(lastPosition).forEach(([techId, position]) => {
+      const posData = position as PositionData
+      setTechnicians(prev => prev.map(tech => 
+        tech.id === techId 
+          ? { ...tech, latitude: posData.latitude, longitude: posData.longitude }
+          : tech
+      ))
+    })
+  }, [lastPosition])
 
   const handleRetryMap = () => {
     setMapError(false)
-    setMapKey(prev => prev + 1) // Recarregar o mapa
+    setMapKey(prev => prev + 1)
   }
 
-  // Calcular posição central baseada nos técnicos ou fallback
   const centerPosition: [number, number] = (() => {
     const onlineWithLocation = technicians.filter(t => t.latitude && t.longitude && t.is_online)
     if (onlineWithLocation.length > 0) {
