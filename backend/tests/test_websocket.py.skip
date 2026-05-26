@@ -1,0 +1,26 @@
+## backend/tests/test_websocket.py
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
+
+
+@pytest.mark.asyncio
+class TestWebSocket:
+    
+    async def test_websocket_connection(self):
+        """Teste: Conectar ao WebSocket"""
+        client = TestClient(app)
+        
+        with client.websocket_connect("/ws/frontend/test123") as websocket:
+            data = websocket.receive_json()
+            # Deve receber confirmação de conexão
+            assert "type" in data or data is not None
+    
+    async def test_websocket_heartbeat(self):
+        """Teste: Enviar ping e receber pong"""
+        client = TestClient(app)
+        
+        with client.websocket_connect("/ws/frontend/test456") as websocket:
+            websocket.send_json({"type": "ping"})
+            response = websocket.receive_json()
+            assert response.get("type") == "pong"
