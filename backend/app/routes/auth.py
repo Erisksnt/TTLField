@@ -1,5 +1,5 @@
 ## backend/app/routes/auth.py
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.user import UserCreate, UserLogin, TokenResponse
@@ -84,7 +84,7 @@ async def refresh_token(
 
 @router.get("/me", response_model=dict)
 async def get_current_user(
-    authorization: str = None,
+    authorization: str = Header(None),
 ):
     """Obter informações do usuário autenticado"""
     if not authorization or not authorization.startswith("Bearer "):
@@ -107,7 +107,7 @@ async def get_current_user(
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
-    authorization: str = None,
+    authorization: str = Header(None),
     db: AsyncSession = Depends(get_db),
 ):
     """

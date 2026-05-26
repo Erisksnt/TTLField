@@ -17,9 +17,10 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Verificar autenticação ao carregar o app
     const verifyAuth = async () => {
+      console.log('🔍 Iniciando verificação de auth...')
       await checkAuth()
+      console.log('Após checkAuth - isAuthenticated:', useAuthStore.getState().isAuthenticated)
       setIsLoading(false)
     }
     verifyAuth()

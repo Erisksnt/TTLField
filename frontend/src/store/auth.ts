@@ -14,27 +14,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true })
     try {
       const response = await api.login(email, password)
-      localStorage.setItem('access_token', response.access_token)
-      localStorage.setItem('refresh_token', response.refresh_token)
 
-      // Buscar dados do usuário após login
+      if (response.access_token) {
+        localStorage.setItem('access_token', response.access_token)
+        localStorage.setItem('refresh_token', response.refresh_token)
+      }
+
       const user = await api.getCurrentUser()
-      
+
       set({
-        user: user,
+        user: user, 
         token: response.access_token,
         refreshToken: response.refresh_token,
         isAuthenticated: true,
         isLoading: false,
       })
     } catch (error) {
+      console.error('❌ Erro no login:', error)
       set({ isLoading: false })
       throw error
     }
   },
 
   logout: () => {
-    // Chamar API de logout (opcional)
     api.logout().catch(() => {})
     
     localStorage.removeItem('access_token')
@@ -66,16 +68,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!token) {
       return false
     }
-
     try {
       const user = await api.getCurrentUser()
-      set({ user: user, isAuthenticated: true })
+      set({ user, isAuthenticated: true })
       return true
     } catch (error) {
-      // Token expirado ou inválido
+      console.error('❌ Erro no checkAuth:', error)
       get().logout()
       return false
     }
   },
-  
 }))

@@ -1,6 +1,6 @@
+// frontend/src/pages/LoginPage.tsx
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import api from '@/services/api'
 import { useAuthStore } from '@/store/auth'
 import toast from 'react-hot-toast'
 
@@ -69,7 +69,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* LINK DE REGISTRO - ADICIONADO */}
         <div className="mt-6 text-center">
           <p className="text-gray-600 text-sm">
             Não tem conta?{' '}

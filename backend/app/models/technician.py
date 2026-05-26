@@ -1,4 +1,5 @@
 ## backend/app/models/technician.py
+import uuid
 from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
