@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/auth'
 import LoginPage from '@/pages/LoginPage'
+import RegisterPage from '@/pages/RegisterPage'
 import DashboardPage from '@/pages/DashboardPage'
 import TechniciansPage from '@/pages/TechniciansPage'
 import AlertsPage from '@/pages/AlertsPage'
@@ -18,9 +19,7 @@ function App() {
 
   useEffect(() => {
     const verifyAuth = async () => {
-      console.log('🔍 Iniciando verificação de auth...')
       await checkAuth()
-      console.log('Após checkAuth - isAuthenticated:', useAuthStore.getState().isAuthenticated)
       setIsLoading(false)
     }
     verifyAuth()
@@ -41,11 +40,17 @@ function App() {
     <Router>
       <div className="min-h-screen bg-gray-50">
         <Routes>
+          {/* Rotas PÚBLICAS (sem ProtectedRoute) */}
           <Route
             path="/login"
             element={!isAuthenticated ? <LoginPage /> : <Navigate to="/" />}
           />
+          <Route
+            path="/register"
+            element={!isAuthenticated ? <RegisterPage /> : <Navigate to="/" />}
+          />
 
+          {/* Rotas PROTEGIDAS (com ProtectedRoute) */}
           <Route
             path="/"
             element={
@@ -54,7 +59,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/technicians"
             element={
@@ -63,7 +67,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/alerts"
             element={
@@ -72,7 +75,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/geofences"
             element={
@@ -81,7 +83,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
 
