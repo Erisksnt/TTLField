@@ -24,15 +24,20 @@ class ApiService {
       return config
     })
 
-    // Interceptor para erros
+    // Interceptor para erros - VERSÃO MELHORADA
     this.api.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
+        // Só redireciona se NÃO for uma requisição de login
+        const isLoginRequest = error.config?.url?.includes('/auth/login')
+        const isRegisterRequest = error.config?.url?.includes('/auth/register')
+        
+        if (error.response?.status === 401 && !isLoginRequest && !isRegisterRequest) {
           localStorage.removeItem('access_token')
           localStorage.removeItem('refresh_token')
           window.location.href = '/login'
         }
+        
         return Promise.reject(error)
       }
     )
@@ -64,13 +69,11 @@ class ApiService {
     return response.data
   }
 
-  // NOVO: Obter usuário atual
   async getCurrentUser(): Promise<User> {
     const response = await this.api.get<User>('/auth/me')
     return response.data
   }
 
-  // NOVO: Logout (revoga o token)
   async logout(): Promise<{ message: string }> {
     const response = await this.api.post('/auth/logout')
     return response.data
