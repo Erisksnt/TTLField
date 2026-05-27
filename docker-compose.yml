@@ -27,6 +27,7 @@ services:
       dockerfile: Dockerfile
     container_name: isp-tracker-api
     environment:
+      TRACCAR_URL: http://traccar:8082
       DATABASE_URL: postgresql+asyncpg://${DB_USER:-tracker_user}:${DB_PASSWORD:-secure_password}@postgres:5432/${DB_NAME:-isp_tracker}
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       ALGORITHM: HS256
@@ -61,6 +62,7 @@ services:
       - tracker_network
     environment:
       VITE_API_URL: http://localhost:8000
+      TRACCAR_URL: http://traccar:8082
 
   # Traccar (GPS Tracking Engine)
   traccar:

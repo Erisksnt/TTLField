@@ -10,6 +10,7 @@ from app.schemas.technician import (
     TechnicianLocationResponse,
     TechnicianUpdate,
 )
+from app.services.traccar_service import TraccarService
 import logging
 
 router = APIRouter(prefix="/technicians", tags=["technicians"])
@@ -21,10 +22,13 @@ async def create_technician(
     technician: TechnicianCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Criar novo técnico"""
+    """Criar novo técnico e dispositivo no Traccar"""
     try:
         # Verificar se employee_id já existe
-        stmt = select(Technician).where(Technician.employee_id == technician.employee_id)
+        stmt = select(Technician).where(
+           Technician.employee_id == technician.employee_id,
+           Technician.deleted_at.is_(None)
+           )
         result = await db.execute(stmt)
         if result.scalar_one_or_none():
             raise HTTPException(
@@ -32,7 +36,20 @@ async def create_technician(
                 detail="ID de funcionário já cadastrado",
             )
         
-        db_technician = Technician(**technician.dict())
+        # Criar dispositivo no Traccar
+        traccar_service = TraccarService()
+        traccar_device = await traccar_service.create_device(
+            name=technician.name,
+            unique_id=technician.employee_id
+        )
+        
+        # Criar técnico no banco
+        technician_data = technician.dict()
+        
+        if traccar_device:
+            technician_data["device_id"] = str(traccar_device.get("id"))
+        
+        db_technician = Technician(**technician_data)
         db.add(db_technician)
         await db.commit()
         await db.refresh(db_technician)
@@ -57,7 +74,7 @@ async def list_technicians(
 ):
     """Listar todos os técnicos"""
     try:
-        stmt = select(Technician)
+        stmt = select(Technician).where(Technician.deleted_at.is_(None))
         
         if is_online is not None:
             stmt = stmt.where(Technician.is_online == is_online)
@@ -83,7 +100,10 @@ async def get_technician(
 ):
     """Obter detalhes de um técnico"""
     try:
-        stmt = select(Technician).where(Technician.id == technician_id)
+        stmt = select(Technician).where(
+            Technician.id == technician_id,
+            Technician.deleted_at.is_(None)
+        )
         result = await db.execute(stmt)
         technician = result.scalar_one_or_none()
         
@@ -112,7 +132,10 @@ async def update_technician(
 ):
     """Atualizar informações de um técnico"""
     try:
-        stmt = select(Technician).where(Technician.id == technician_id)
+        stmt = select(Technician).where(
+            Technician.id == technician_id,
+            Technician.deleted_at.is_(None)
+        )
         result = await db.execute(stmt)
         technician = result.scalar_one_or_none()
         
@@ -145,9 +168,12 @@ async def delete_technician(
     technician_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Deletar um técnico"""
+    """Soft delete - marcar como deletado e remover do Traccar"""
     try:
-        stmt = select(Technician).where(Technician.id == technician_id)
+        stmt = select(Technician).where(
+            Technician.id == technician_id,
+            Technician.deleted_at.is_(None)
+        )
         result = await db.execute(stmt)
         technician = result.scalar_one_or_none()
         
@@ -157,8 +183,19 @@ async def delete_technician(
                 detail="Técnico não encontrado",
             )
         
-        await db.delete(technician)
+        # Remover dispositivo do Traccar
+        if technician.device_id:
+            try:
+                traccar_service = TraccarService()
+                await traccar_service.delete_device(technician.device_id)
+                logger.info(f"✅ Dispositivo {technician.device_id} removido do Traccar")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao remover dispositivo do Traccar: {str(e)}")
+        
+        # Soft delete no banco
+        technician.soft_delete()
         await db.commit()
+        
     except HTTPException as e:
         raise e
     except Exception as e:

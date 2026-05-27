@@ -14,7 +14,7 @@ export interface Technician {
   id: string
   name: string
   employee_id: string
-  cpf?: string
+  cpf?: string | null
   email?: string
   phone?: string
   is_active: boolean
@@ -24,6 +24,7 @@ export interface Technician {
   accuracy?: number
   battery_level?: number
   device_id?: string
+  notes?: string
   last_seen?: string
   created_at: string
   updated_at: string
@@ -114,7 +115,7 @@ export interface MapLocation {
 }
 
 export interface RouteData {
-  cpf?: string;
+  cpf?: string | null;
   technician_id: string
   distance_km: number
   start_datetime: string

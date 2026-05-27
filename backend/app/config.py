@@ -1,4 +1,6 @@
 ## backend/app/config.py
+import os
+
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
@@ -34,7 +36,7 @@ class Settings(BaseSettings):
     cors_headers: list = ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"]
     
     # Traccar
-    traccar_url: str = "http://localhost:8082"
+    traccar_url: str = os.getenv("TRACCAR_URL", "http://localhost:8082")
     traccar_admin_user: str = "admin"
     traccar_admin_password: str = "admin"
     

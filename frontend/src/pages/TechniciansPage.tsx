@@ -1,4 +1,4 @@
-// backend/app/routes/technicians.py
+// frontend/src/pages/TechniciansPage.tsx
 import { useEffect, useState } from 'react'
 import { Trash2, Plus, Edit2, MapPin } from 'lucide-react'
 import Layout from '@/components/Layout'
@@ -12,7 +12,7 @@ interface FormData {
   employee_id: string
   email: string
   phone: string
-  cpf: string
+  cpf?: string | null
   notes: string
 }
 
@@ -21,7 +21,7 @@ const initialFormData: FormData = {
   employee_id: '',
   email: '',
   phone: '',
-  cpf: '',
+  cpf: null,
   notes: '',
 }
 
@@ -32,6 +32,7 @@ export default function TechniciansPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [filterOnline, setFilterOnline] = useState<boolean | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     fetchTechnicians()
@@ -63,12 +64,24 @@ export default function TechniciansPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
     try {
+    const submitData = {
+         name: formData.name,
+         employee_id: formData.employee_id,
+         ...(formData.email && { email: formData.email }),
+         ...(formData.phone && { phone: formData.phone }),
+         ...(formData.cpf && { cpf: formData.cpf }),
+         ...(formData.notes && { notes: formData.notes })
+       }
+
       if (editingId) {
-        await api.updateTechnician(editingId, formData)
+        await api.updateTechnician(editingId, submitData)
         toast.success('Técnico atualizado com sucesso!')
       } else {
-        await api.createTechnician(formData)
+        await api.createTechnician(submitData)
         toast.success('Técnico criado com sucesso!')
       }
 
@@ -78,6 +91,8 @@ export default function TechniciansPage() {
       fetchTechnicians()
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Erro ao salvar técnico')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -87,8 +102,8 @@ export default function TechniciansPage() {
       employee_id: technician.employee_id,
       email: technician.email || '',
       phone: technician.phone || '',
-      cpf: technician.cpf || '',
-      notes: '',
+      cpf: technician.cpf || null,
+      notes: technician.notes || '',
     })
     setEditingId(technician.id)
     setShowModal(true)
@@ -403,7 +418,7 @@ export default function TechniciansPage() {
                 <input
                   type="text"
                   name="cpf"
-                  value={formData.cpf}
+                  value={formData.cpf || ''}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 />
@@ -425,9 +440,10 @@ export default function TechniciansPage() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
+                  disabled={isSubmitting}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition"
                 >
-                  {editingId ? 'Atualizar' : 'Criar'}
+                  {isSubmitting ? 'Salvando...' : (editingId ? 'Atualizar' : 'Criar')}
                 </button>
                 <button
                   type="button"

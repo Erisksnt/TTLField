@@ -29,7 +29,7 @@ class Technician(Base, SoftDeleteMixin):
     
     # Status do dispositivo
     battery_level = Column(Integer, nullable=True)  # 0-100
-    device_id = Column(String, ForeignKey("devices.id"), nullable=True)
+    device_id = Column(String, nullable=True)
     
     # Auditoria
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

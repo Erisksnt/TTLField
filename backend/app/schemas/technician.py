@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field, ConfigDict
+## backend/app/schemas/technician.py
+from pydantic import BaseModel, Field, ConfigDict, validator
 from datetime import datetime
 from typing import Optional
 
@@ -10,6 +11,13 @@ class TechnicianBase(BaseModel):
     phone: Optional[str] = None
     cpf: Optional[str] = None
     notes: Optional[str] = None
+    
+    @validator('email', 'phone', 'cpf', 'notes', pre=True)
+    def empty_str_to_none(cls, v):
+        """Converter string vazia para None"""
+        if v == "":
+            return None
+        return v
 
 
 class TechnicianCreate(TechnicianBase):
@@ -23,12 +31,22 @@ class TechnicianUpdate(BaseModel):
     cpf: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    
+    @validator('email', 'phone', 'cpf', 'notes', pre=True)
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 
 class TechnicianLocationResponse(BaseModel):
     id: str
     name: str
     employee_id: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    cpf: Optional[str] = None
+    notes: Optional[str] = None
     is_online: bool
     latitude: Optional[float]
     longitude: Optional[float]
