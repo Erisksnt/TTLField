@@ -1,4 +1,4 @@
-// frontend/src/components/Layout.tsx (versão responsiva)
+// frontend/src/components/Layout.tsx (versão com logo)
 import { ReactNode, useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
@@ -10,8 +10,9 @@ import {
   AlertCircle,
   MapPin,
   LogOut,
-  ChevronLeft,
 } from 'lucide-react'
+import logoMenu from '@/assets/img/logo-menu.png'
+import logoFooter from '@/assets/img/logo-footer.png'
 
 interface LayoutProps {
   children: ReactNode
@@ -21,7 +22,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const logout = useAuthStore((state) => state.logout)
-  const [sidebarOpen, setSidebarOpen] = useState(false) // Começa fechado no mobile
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
   // Detectar mobile
@@ -29,9 +30,9 @@ export default function Layout({ children }: LayoutProps) {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
       if (window.innerWidth >= 768) {
-        setSidebarOpen(true) // Desktop: sidebar aberta
+        setSidebarOpen(true)
       } else {
-        setSidebarOpen(false) // Mobile: sidebar fechada
+        setSidebarOpen(false)
       }
     }
     checkMobile()
@@ -71,7 +72,11 @@ export default function Layout({ children }: LayoutProps) {
       >
         <div className="p-4 flex items-center justify-between">
           {sidebarOpen && (
-            <h1 className="text-xl font-bold">ISP Tracker</h1>
+            <img 
+              src={logoFooter} 
+              alt="Total Links Tracker" 
+              className="h-14 w-auto"
+            />
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -128,7 +133,11 @@ export default function Layout({ children }: LayoutProps) {
               <Menu size={20} />
             </button>
             <div className="text-gray-700">
-              <h2 className="text-base md:text-lg font-semibold">ISP Tracker Platform</h2>
+              <img 
+                src={logoMenu} 
+                alt="Total Links Tracker" 
+                className="h-8 md:h-14 w-auto"
+              />
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
