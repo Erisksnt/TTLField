@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
+import logoMenu from '@/assets/img/logo-menu.png'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -64,10 +65,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0b1e2d] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">ISP Tracker</h1>
-        <p className="text-gray-600 mb-6">Plataforma de Rastreamento Operacional</p>
+        {/* LOGO - ADICIONADO */}
+        <div className="flex justify-center mb-6">
+          <img 
+            src={logoMenu} 
+            alt="Total Links Tracker" 
+            className="h-18 w-auto"
+          />
+        </div>
+        
+        <p className="text-gray-600 text-center mb-6">Plataforma de Rastreamento Operacional</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
