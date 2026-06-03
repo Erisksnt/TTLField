@@ -1,10 +1,12 @@
+## backend/app/models/geofence.py
 from sqlalchemy import Column, String, DateTime, Boolean, JSON, Text, Integer
 from datetime import datetime
 from app.database import Base
+from app.models.mixins import SoftDeleteMixin
 import uuid
 
 
-class Geofence(Base):
+class Geofence(Base, SoftDeleteMixin):
     __tablename__ = "geofences"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -33,8 +35,5 @@ class Geofence(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
-    # Relacionamentos
-    # events = relationship("Event", back_populates="geofence", cascade="all, delete-orphan")
-
     def __repr__(self) -> str:
         return f"<Geofence id={self.id} name={self.name} type={self.geofence_type}>"

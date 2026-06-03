@@ -1,7 +1,8 @@
+// frontend/src/pages/GeofencesPage.tsx
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Circle, Polygon, useMap } from 'react-leaflet'
 import { LatLngTuple } from 'leaflet'
-import { Trash2, Plus, Edit2, Map as MapIcon } from 'lucide-react'
+import { Trash2, Plus, Edit2, Map as MapIcon, Target } from 'lucide-react'
 import Layout from '@/components/Layout'
 import api from '@/services/api'
 import { Geofence } from '@/types'
@@ -17,6 +18,8 @@ interface FormData {
   coordinates?: Array<[number, number]>
   alert_on_enter: boolean
   alert_on_exit: boolean
+  center_latitude?: string
+  center_longitude?: string
 }
 
 const initialFormData: FormData = {
@@ -27,13 +30,34 @@ const initialFormData: FormData = {
   coordinates: [],
   alert_on_enter: true,
   alert_on_exit: true,
+  center_latitude: '',
+  center_longitude: '',
 }
 
-function MapController() {
+function MapController({ onMapClick, isSelectingLocation }: { onMapClick: (lat: number, lng: number) => void; isSelectingLocation: boolean }) {
   const map = useMap()
   useEffect(() => {
     map.setView([-23.55, -46.63], 11)
-  }, [map])
+    
+    if (isSelectingLocation) {
+      map.getContainer().style.cursor = 'crosshair'
+    } else {
+      map.getContainer().style.cursor = ''
+    }
+    
+    if (onMapClick) {
+      map.on('click', (e) => {
+        if (isSelectingLocation) {
+          onMapClick(e.latlng.lat, e.latlng.lng)
+        }
+      })
+    }
+    
+    return () => {
+      map.off('click')
+    }
+  }, [map, isSelectingLocation, onMapClick])
+  
   return null
 }
 
@@ -44,6 +68,8 @@ export default function GeofencesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [selectedGeofence, setSelectedGeofence] = useState<string | null>(null)
+  const [isSelectingLocation, setIsSelectingLocation] = useState(false)
+  const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(null)
 
   useEffect(() => {
     fetchGeofences()
@@ -60,6 +86,17 @@ export default function GeofencesPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleMapClick = (lat: number, lng: number) => {
+    setSelectedPosition([lat, lng])
+    setFormData(prev => ({
+      ...prev,
+      center_latitude: lat.toString(),
+      center_longitude: lng.toString()
+    }))
+    setIsSelectingLocation(false)
+    toast.success('Localização selecionada!')
   }
 
   const handleChange = (
@@ -83,7 +120,10 @@ export default function GeofencesPage() {
         formData.geofence_type === 'circle'
           ? {
               type: 'Point',
-              coordinates: [-46.63, -23.55], // Esse será substituído pelo usuário
+              coordinates: [
+                parseFloat(formData.center_longitude || '-46.63'),
+                parseFloat(formData.center_latitude || '-23.55')
+              ],
             }
           : {
               type: 'Polygon',
@@ -91,7 +131,14 @@ export default function GeofencesPage() {
             }
 
       const payload = {
-        ...formData,
+        name: formData.name,
+        description: formData.description,
+        geofence_type: formData.geofence_type,
+        radius_meters: formData.radius_meters,
+        alert_on_enter: formData.alert_on_enter,
+        alert_on_exit: formData.alert_on_exit,
+        center_latitude: formData.center_latitude,
+        center_longitude: formData.center_longitude,
         geometry,
       }
 
@@ -106,6 +153,7 @@ export default function GeofencesPage() {
       setShowModal(false)
       setEditingId(null)
       setFormData(initialFormData)
+      setSelectedPosition(null)
       fetchGeofences()
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Erro ao salvar geofence')
@@ -117,9 +165,16 @@ export default function GeofencesPage() {
       name: geofence.name,
       description: geofence.description || '',
       geofence_type: geofence.geofence_type,
+      radius_meters: geofence.radius_meters || 500,
       alert_on_enter: geofence.alert_on_enter,
       alert_on_exit: geofence.alert_on_exit,
+      center_latitude: geofence.center_latitude || '',
+      center_longitude: geofence.center_longitude || '',
+      coordinates: [],
     })
+    if (geofence.center_latitude && geofence.center_longitude) {
+      setSelectedPosition([parseFloat(geofence.center_latitude), parseFloat(geofence.center_longitude)])
+    }
     setEditingId(geofence.id)
     setShowModal(true)
   }
@@ -142,6 +197,8 @@ export default function GeofencesPage() {
     setShowModal(false)
     setEditingId(null)
     setFormData(initialFormData)
+    setSelectedPosition(null)
+    setIsSelectingLocation(false)
   }
 
   return (
@@ -191,21 +248,24 @@ export default function GeofencesPage() {
             <MapContainer
               center={[-23.55, -46.63] as LatLngTuple}
               zoom={11}
-              style={{ height: '100%', width: '100%' }}
+              style={{ height: '100%', width: '100%', zIndex: 1 }}
             >
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; OpenStreetMap contributors'
               />
-              <MapController />
+              <MapController 
+                onMapClick={handleMapClick} 
+                isSelectingLocation={isSelectingLocation} 
+              />
 
               {geofences.map((geofence) => {
-                if (geofence.geofence_type === 'circle') {
+                if (geofence.geofence_type === 'circle' && geofence.center_latitude && geofence.center_longitude) {
                   return (
                     <Circle
                       key={geofence.id}
-                      center={[-23.55, -46.63]}
-                      radius={500}
+                      center={[parseFloat(geofence.center_latitude), parseFloat(geofence.center_longitude)]}
+                      radius={geofence.radius_meters || 500}
                       pathOptions={{
                         color: geofence.is_active ? '#3b82f6' : '#999',
                         fillOpacity: 0.2,
@@ -215,6 +275,18 @@ export default function GeofencesPage() {
                 }
                 return null
               })}
+              
+              {selectedPosition && (
+                <Circle
+                  center={selectedPosition}
+                  radius={formData.radius_meters || 500}
+                  pathOptions={{
+                    color: '#22c55e',
+                    fillOpacity: 0.3,
+                    weight: 3,
+                  }}
+                />
+              )}
             </MapContainer>
           </div>
         </div>
@@ -235,24 +307,12 @@ export default function GeofencesPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Nome
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Tipo
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Descrição
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Alertas
-                    </th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                      Ações
-                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Nome</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Tipo</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Descrição</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Alertas</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -263,82 +323,40 @@ export default function GeofencesPage() {
                       onClick={() => setSelectedGeofence(geofence.id)}
                     >
                       <td className="px-6 py-4">
-                        <p className="font-medium text-gray-900">
-                          {geofence.name}
-                        </p>
+                        <p className="font-medium text-gray-900">{geofence.name}</p>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                          {geofence.geofence_type === 'circle'
-                            ? '◯ Círculo'
-                            : geofence.geofence_type === 'polygon'
-                              ? '▢ Polígono'
-                              : '▭ Retângulo'}
+                          {geofence.geofence_type === 'circle' ? '◯ Círculo' : geofence.geofence_type === 'polygon' ? '▢ Polígono' : '▭ Retângulo'}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-gray-600 text-sm">
-                          {geofence.description || '-'}
-                        </p>
+                        <p className="text-gray-600 text-sm">{geofence.description || '-'}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                            geofence.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              geofence.is_active ? 'bg-green-600' : 'bg-red-600'
-                            }`}
-                          ></span>
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                          geofence.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${geofence.is_active ? 'bg-green-600' : 'bg-red-600'}`}></span>
                           {geofence.is_active ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                              geofence.alert_on_enter
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            Entrada
-                          </span>
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                              geofence.alert_on_exit
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            Saída
-                          </span>
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                            geofence.alert_on_enter ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                          }`}>Entrada</span>
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                            geofence.alert_on_exit ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                          }`}>Saída</span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleEdit(geofence)
-                            }}
-                            className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition"
-                            title="Editar"
-                          >
+                          <button onClick={(e) => { e.stopPropagation(); handleEdit(geofence) }} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition" title="Editar">
                             <Edit2 size={18} />
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDelete(geofence.id)
-                            }}
-                            className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition"
-                            title="Deletar"
-                          >
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(geofence.id) }} className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition" title="Deletar">
                             <Trash2 size={18} />
                           </button>
                         </div>
@@ -354,7 +372,7 @@ export default function GeofencesPage() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               {editingId ? 'Editar Geofence' : 'Novo Geofence'}
@@ -362,44 +380,18 @@ export default function GeofencesPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome *
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  placeholder="Ex: Escritório Principal"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+                <input type="text" name="name" value={formData.name} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="Ex: Escritório Principal" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descrição
-                </label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  placeholder="Descrição do geofence"
-                ></textarea>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                <textarea name="description" value={formData.description} onChange={handleChange} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="Descrição do geofence"></textarea>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de Geofence *
-                </label>
-                <select
-                  name="geofence_type"
-                  value={formData.geofence_type}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Geofence *</label>
+                <select name="geofence_type" value={formData.geofence_type} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
                   <option value="circle">Círculo</option>
                   <option value="polygon">Polígono</option>
                   <option value="rectangle">Retângulo</option>
@@ -407,64 +399,51 @@ export default function GeofencesPage() {
               </div>
 
               {formData.geofence_type === 'circle' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Raio (metros)
-                  </label>
-                  <input
-                    type="number"
-                    name="radius_meters"
-                    value={formData.radius_meters}
-                    onChange={handleChange}
-                    min="10"
-                    max="10000"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Raio (metros)</label>
+                    <input type="number" name="radius_meters" value={formData.radius_meters} onChange={handleChange} min="10" max="10000" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Localização</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsSelectingLocation(true)}
+                      className="w-full flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition"
+                    >
+                      <Target size={16} />
+                      {selectedPosition 
+                        ? `Lat: ${selectedPosition[0].toFixed(4)}, Lng: ${selectedPosition[1].toFixed(4)}`
+                        : 'Clique no mapa para selecionar a localização'}
+                    </button>
+                    {isSelectingLocation && (
+                      <p className="text-blue-600 text-xs mt-1">Clique no mapa para definir o centro do geofence</p>
+                    )}
+                    {selectedPosition && (
+                      <p className="text-green-600 text-xs mt-1">✓ Localização selecionada</p>
+                    )}
+                  </div>
+                </>
               )}
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700">Alertas</p>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="alert_enter"
-                    name="alert_on_enter"
-                    checked={formData.alert_on_enter}
-                    onChange={handleChange}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                  />
-                  <label htmlFor="alert_enter" className="text-sm text-gray-700">
-                    Alerta ao entrar no geofence
-                  </label>
+                  <input type="checkbox" id="alert_enter" name="alert_on_enter" checked={formData.alert_on_enter} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500" />
+                  <label htmlFor="alert_enter" className="text-sm text-gray-700">Alerta ao entrar no geofence</label>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="alert_exit"
-                    name="alert_on_exit"
-                    checked={formData.alert_on_exit}
-                    onChange={handleChange}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                  />
-                  <label htmlFor="alert_exit" className="text-sm text-gray-700">
-                    Alerta ao sair do geofence
-                  </label>
+                  <input type="checkbox" id="alert_exit" name="alert_on_exit" checked={formData.alert_on_exit} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500" />
+                  <label htmlFor="alert_exit" className="text-sm text-gray-700">Alerta ao sair do geofence</label>
                 </div>
               </div>
 
               <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition"
-                >
+                <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
                   {editingId ? 'Atualizar' : 'Criar'}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-2 px-4 rounded-lg transition"
-                >
+                <button type="button" onClick={handleCloseModal} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-2 px-4 rounded-lg transition">
                   Cancelar
                 </button>
               </div>
@@ -472,8 +451,7 @@ export default function GeofencesPage() {
 
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs text-blue-700">
-                <strong>💡 Dica:</strong> Você pode desenhar geofences no mapa
-                acima após criar a cerca.
+                <strong>💡 Dica:</strong> Clique no botão "Clique no mapa" e depois no mapa para definir a localização do geofence.
               </p>
             </div>
           </div>

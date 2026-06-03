@@ -53,7 +53,10 @@ export interface Geofence {
   name: string
   description?: string
   geofence_type: 'circle' | 'polygon' | 'rectangle'
-  geometry: Record<string, unknown>
+  geometry: any
+  radius_meters?: number
+  center_latitude?: string
+  center_longitude?: string
   is_active: boolean
   alert_on_enter: boolean
   alert_on_exit: boolean
