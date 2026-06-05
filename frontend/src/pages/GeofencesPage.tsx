@@ -1,7 +1,6 @@
-// frontend/src/pages/GeofencesPage.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMap, Tooltip } from 'react-leaflet'
-import { LatLngTuple, Icon } from 'leaflet'
+import { LatLngTuple, Icon, Map as LeafletMap } from 'leaflet'
 import { Trash2, Plus, Edit2, Map as MapIcon, Target, Search } from 'lucide-react'
 import Layout from '@/components/Layout'
 import api from '@/services/api'
@@ -30,7 +29,6 @@ const initialFormData: FormData = {
   address: '',
 }
 
-// Função para buscar endereço a partir das coordenadas
 const fetchAddress = async (lat: number, lng: number) => {
   try {
     const response = await fetch(
@@ -44,7 +42,6 @@ const fetchAddress = async (lat: number, lng: number) => {
   }
 }
 
-// Componente para controlar o mapa e permitir seleção
 function MapSelector({ onLocationSelect, selectedLocation, isSelecting, onClose }: { 
   onLocationSelect: (lat: number, lng: number) => void
   selectedLocation: [number, number] | null
@@ -81,7 +78,6 @@ function MapSelector({ onLocationSelect, selectedLocation, isSelecting, onClose 
   return null
 }
 
-// Modal de seleção de localização
 function LocationSelectorModal({ isOpen, onClose, onConfirm, initialLocation }: {
   isOpen: boolean
   onClose: () => void
@@ -172,10 +168,7 @@ function LocationSelectorModal({ isOpen, onClose, onConfirm, initialLocation }: 
         </p>
         
         <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"
-          >
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition">
             Cancelar
           </button>
           <button
@@ -200,6 +193,7 @@ export default function GeofencesPage() {
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [selectedGeofence, setSelectedGeofence] = useState<string | null>(null)
   const [selectedPosition, setSelectedPosition] = useState<[number, number] | null>(null)
+  const mapRef = useRef<LeafletMap | null>(null)
 
   useEffect(() => {
     fetchGeofences()
@@ -218,13 +212,15 @@ export default function GeofencesPage() {
     }
   }
 
-  // Função - busca endereço e salva
+  const centerMapOnGeofence = (lat: number, lng: number, zoom: number = 15) => {
+    if (mapRef.current) {
+      mapRef.current.setView([lat, lng], zoom)
+    }
+  }
+
   const handleConfirmLocation = async (lat: number, lng: number) => {
     setSelectedPosition([lat, lng])
-    
-    // Buscar endereço
     const address = await fetchAddress(lat, lng)
-    
     setFormData(prev => ({
       ...prev,
       center_latitude: lat.toString(),
@@ -235,16 +231,11 @@ export default function GeofencesPage() {
     toast.success('Localização definida!')
   }
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]:
-        type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     }))
   }
 
@@ -360,7 +351,6 @@ export default function GeofencesPage() {
           </button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-gray-600 text-sm">Total de Geofences</p>
@@ -376,11 +366,11 @@ export default function GeofencesPage() {
           </div>
         </div>
 
-        {/* Mapa */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold mb-4">Mapa de Geofences</h2>
           <div className="h-96 rounded-lg overflow-hidden border">
             <MapContainer
+              ref={mapRef}
               center={[-23.55, -46.63] as LatLngTuple}
               zoom={11}
               style={{ height: '100%', width: '100%', zIndex: 1 }}
@@ -389,9 +379,7 @@ export default function GeofencesPage() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; OpenStreetMap contributors'
               />
-              
               {geofences.map((geofence) => {
-                console.log('Renderizando geofence:', geofence.name, geofence.center_latitude, geofence.center_longitude)
                 if (geofence.center_latitude && geofence.center_longitude) {
                   return (
                     <Circle
@@ -410,9 +398,7 @@ export default function GeofencesPage() {
                           <p className="font-semibold">{geofence.name}</p>
                           <p className="text-gray-600">Raio: {geofence.radius || 500} m</p>
                           {geofence.address && (
-                            <p className="text-gray-500 text-xs mt-1 truncate max-w-[200px]">
-                              📍 {geofence.address}
-                            </p>
+                            <p className="text-gray-500 text-xs mt-1 truncate max-w-[200px]">📍 {geofence.address}</p>
                           )}
                         </div>
                       </Tooltip>
@@ -425,7 +411,6 @@ export default function GeofencesPage() {
           </div>
         </div>
 
-        {/* Tabela */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center">
@@ -454,7 +439,16 @@ export default function GeofencesPage() {
                     <tr
                       key={geofence.id}
                       className="hover:bg-gray-50 transition cursor-pointer"
-                      onClick={() => setSelectedGeofence(geofence.id)}
+                      onClick={() => {
+                        if (geofence.center_latitude && geofence.center_longitude) {
+                          centerMapOnGeofence(
+                            parseFloat(geofence.center_latitude),
+                            parseFloat(geofence.center_longitude)
+                          )
+                        } else {
+                          toast.error('Geofence sem localização definida')
+                        }
+                      }}
                     >
                       <td className="px-6 py-4">
                         <p className="font-medium text-gray-900">{geofence.name}</p>
@@ -504,30 +498,25 @@ export default function GeofencesPage() {
         </div>
       </div>
 
-      {/* Modal de Criação/Edição */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               {editingId ? 'Editar Geofence' : 'Novo Geofence'}
             </h2>
-
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
                 <input type="text" name="name" value={formData.name} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
                 <textarea name="description" value={formData.description} onChange={handleChange} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Raio (metros)</label>
                 <input type="number" name="radius" value={formData.radius} onChange={handleChange} min="10" max="10000" required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Localização (centro)</label>
                 <button
@@ -540,11 +529,8 @@ export default function GeofencesPage() {
                     ? `Lat: ${selectedPosition[0].toFixed(4)}, Lng: ${selectedPosition[1].toFixed(4)}`
                     : 'Clique para selecionar a localização'}
                 </button>
-                {selectedPosition && (
-                  <p className="text-green-600 text-xs mt-1">✓ Localização selecionada</p>
-                )}
+                {selectedPosition && <p className="text-green-600 text-xs mt-1">✓ Localização selecionada</p>}
               </div>
-
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700">Alertas</p>
                 <div className="flex items-center gap-2">
@@ -556,7 +542,6 @@ export default function GeofencesPage() {
                   <label htmlFor="alert_exit" className="text-sm text-gray-700">Alerta ao sair</label>
                 </div>
               </div>
-
               <div className="flex gap-3 pt-4">
                 <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
                   {editingId ? 'Atualizar' : 'Criar'}
@@ -570,7 +555,6 @@ export default function GeofencesPage() {
         </div>
       )}
 
-      {/* Modal de Seleção de Localização */}
       <LocationSelectorModal
         isOpen={showLocationModal}
         onClose={() => setShowLocationModal(false)}
