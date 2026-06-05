@@ -18,6 +18,9 @@ async def create_geofence(
 ):
     """Criar novo geofence"""
     try:
+        # Verifique se os dados estão chegando
+        logger.info(f"Dados recebidos: center_latitude={geofence.center_latitude}, center_longitude={geofence.center_longitude}, radius={geofence.radius}")
+        
         db_geofence = Geofence(**geofence.dict())
         db.add(db_geofence)
         await db.commit()

@@ -1,10 +1,10 @@
 // frontend/src/pages/DashboardPage.tsx
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap } from 'react-leaflet'
 import { Icon } from 'leaflet'
 import Layout from '@/components/Layout'
 import api from '@/services/api'
-import { Technician } from '@/types'
+import { Technician, Geofence } from '@/types'
 import { Loader, MapPin, AlertCircle, RefreshCw } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -26,6 +26,7 @@ const customIcon = new Icon({
 
 export default function DashboardPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [geofences, setGeofences] = useState<Geofence[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [mapError, setMapError] = useState(false)
   const [mapKey, setMapKey] = useState(0)
@@ -37,14 +38,24 @@ export default function DashboardPage() {
       setTechnicians(data)
     } catch (error) {
       console.error('Erro ao carregar técnicos:', error)
+    }
+  }
+
+  const fetchGeofences = async () => {
+    try {
+      const data = await api.getGeofences()
+      setGeofences(data)
+    } catch (error) {
+      console.error('Erro ao carregar geofences:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Carregar técnicos ao iniciar
+  // Carregar dados ao iniciar
   useEffect(() => {
     fetchTechnicians()
+    fetchGeofences()
   }, [])
 
   // Atualizar posições via WebSocket
@@ -62,6 +73,11 @@ export default function DashboardPage() {
   const handleRetryMap = () => {
     setMapError(false)
     setMapKey(prev => prev + 1)
+  }
+
+  const handleRefresh = () => {
+    fetchTechnicians()
+    fetchGeofences()
   }
 
   const centerPosition: [number, number] = (() => {
@@ -86,7 +102,7 @@ export default function DashboardPage() {
             <p className="text-gray-600">Monitoramento em tempo real</p>
           </div>
           <button
-            onClick={() => fetchTechnicians()}
+            onClick={handleRefresh}
             className="flex items-center gap-1 md:gap-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base"
           >
             <RefreshCw size={14} className="md:w-4 md:h-4" />
@@ -111,8 +127,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-gray-600 text-sm font-medium">Alertas Ativos</h3>
-            <p className="text-3xl font-bold text-red-600 mt-2">0</p>
+            <h3 className="text-gray-600 text-sm font-medium">Geofences</h3>
+            <p className="text-3xl font-bold text-purple-600 mt-2">{geofences.filter(g => g.is_active).length}</p>
           </div>
         </div>
 
@@ -150,6 +166,40 @@ export default function DashboardPage() {
                     error: () => setMapError(true),
                   }}
                 />
+                
+                {/* Geofences - Círculos */}
+                {geofences.map((geofence) => {
+                  if (geofence.geofence_type === 'circle' && geofence.center_latitude && geofence.center_longitude) {
+                    return (
+                      <Circle
+                        key={geofence.id}
+                        center={[parseFloat(geofence.center_latitude), parseFloat(geofence.center_longitude)]}
+                        radius={geofence.radius || 500}
+                        pathOptions={{
+                          color: geofence.is_active ? '#3b82f6' : '#999',
+                          fillColor: geofence.is_active ? '#3b82f6' : '#999',
+                          fillOpacity: 0.15,
+                          weight: 1.5,
+                        }}
+                      >
+                        <Tooltip sticky>
+                          <div className="text-sm">
+                            <p className="font-semibold">{geofence.name}</p>
+                            <p className="text-gray-600">Raio: {geofence.radius || 500} m</p>
+                            {geofence.address && (
+                              <p className="text-gray-500 text-xs mt-1 truncate max-w-[200px]">
+                                📍 {geofence.address}
+                              </p>
+                            )}
+                          </div>
+                        </Tooltip>
+                      </Circle>
+                    )
+                  }
+                  return null
+                })}
+                
+                {/* Técnicos */}
                 {onlineTechnicians
                   .filter((t) => t.latitude && t.longitude)
                   .map((technician) => (

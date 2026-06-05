@@ -51,10 +51,11 @@ export interface Position {
 export interface Geofence {
   id: string
   name: string
+  address?: string
   description?: string
-  geofence_type: 'circle' | 'polygon' | 'rectangle'
+  geofence_type: 'circle'
   geometry: any
-  radius_meters?: number
+  radius?: number
   center_latitude?: string
   center_longitude?: string
   is_active: boolean

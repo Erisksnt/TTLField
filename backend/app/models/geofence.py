@@ -11,6 +11,7 @@ class Geofence(Base, SoftDeleteMixin):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, index=True)
+    address = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     
     # Tipo de geofence
