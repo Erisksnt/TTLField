@@ -65,34 +65,34 @@ services:
       VITE_API_URL: http://localhost:8000
       TRACCAR_URL: http://traccar:8082
 
-#  # Traccar (GPS Tracking Engine)
-#  traccar:
-#    image: traccar/traccar:latest
-#    container_name: isp-tracker-traccar
-#    ports:
-#      - "8082:8082"
-#      - "5005:5005"
-#      - "5055:5055"
-#      - "5067:5067"
-#      - "6046:6046"
-#    volumes:
-#      - traccar_data:/opt/traccar/data
-#      - traccar_conf:/opt/traccar/conf
-#    networks:
-#      - tracker_network
-#    environment:
-#      - database.driver=org.postgresql.Driver
-#      - database.url=jdbc:postgresql://postgres:5432/${DB_NAME:-isp_tracker}
-#      - database.user=${DB_USER:-tracker_user}
-#      - database.password=${DB_PASSWORD:-secure_password}
+  # Traccar (GPS Tracking Engine)
+  traccar:
+    image: traccar/traccar:latest
+    container_name: isp-tracker-traccar
+    ports:
+      - "8082:8082"
+      - "5005:5005"
+      - "5055:5055"
+      - "5067:5067"
+      - "6046:6046"
+    volumes:
+      - traccar_data:/opt/traccar/data
+      - traccar_conf:/opt/traccar/conf
+    networks:
+      - tracker_network
+    environment:
+      - database.driver=org.postgresql.Driver
+      - database.url=jdbc:postgresql://postgres:5432/${DB_NAME:-isp_tracker}
+      - database.user=${DB_USER:-tracker_user}
+      - database.password=${DB_PASSWORD:-secure_password}
 
 volumes:
   postgres_data:
     driver: local
-  #traccar_data:
-  #  driver: local
-  #traccar_conf:
-  #  driver: local
+  traccar_data:
+    driver: local
+  traccar_conf:
+    driver: local
 
 networks:
   tracker_network:
