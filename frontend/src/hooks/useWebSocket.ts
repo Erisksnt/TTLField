@@ -20,7 +20,9 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     if (!token) return
 
-    const wsUrl = `ws://localhost:8000/ws/frontend/${Date.now()}`
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const wsBase = apiBase.replace(/^http/, 'ws')
+    const wsUrl = `${wsBase}/ws/frontend/${Date.now()}?token=${encodeURIComponent(token)}`
     const ws = new WebSocket(wsUrl)
     
     ws.onopen = () => {
