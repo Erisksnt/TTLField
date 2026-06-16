@@ -1,3 +1,6 @@
+## backend/app/services/tracking_service.py
+import httpx
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc, and_
@@ -5,7 +8,11 @@ from datetime import datetime, timedelta
 from app.models.position import Position
 from app.models.technician import Technician
 from app.schemas.position import PositionCreate, PositionResponse
+from app.services.traccar_service import TraccarService
+from app.database import AsyncSessionLocal
 from math import radians, cos, sin, asin, sqrt
+
+logger = logging.getLogger(__name__)
 
 
 class TrackingService:
@@ -158,3 +165,120 @@ class TrackingService:
             total_distance += distance
         
         return total_distance / 1000  # Converter para km
+
+
+# ============================================================
+# FUNÇÃO DE SINCRONIZAÇÃO COM O TRACCAR (COM LOGS E PRINTS DETALHADOS)
+# ============================================================
+
+async def update_all_technicians_positions():
+    """Busca dispositivos no Traccar e atualiza técnicos no banco local."""
+    print("🔍 Entrou na função de sincronização!")
+    logger.info("🔄 Iniciando sincronização com Traccar...")
+    traccar = TraccarService()
+    
+    print("🔍 Tentando autenticar no Traccar...")
+    try:
+        auth_ok = await traccar.authenticate()
+        print(f"🔍 Autenticação retornou: {auth_ok}")
+        logger.info(f"✅ Autenticação: {auth_ok}")
+        if not auth_ok:
+            print("❌ Falha na autenticação (retornou False)")
+            logger.error("❌ Falha na autenticação com Traccar (retornou False)")
+            return
+    except Exception as e:
+        print(f"❌ Exceção na autenticação: {e}")
+        logger.error(f"❌ Exceção na autenticação: {e}")
+        return
+
+    print("🔍 Buscando dispositivos no Traccar...")
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"{traccar.api_url}/devices",
+                cookies={"JSESSIONID": traccar.session_cookie}
+            )
+            print(f"🔍 Status da resposta /devices: {response.status_code}")
+            logger.info(f"📊 Status da requisição /devices: {response.status_code}")
+            if response.status_code != 200:
+                print(f"❌ Erro ao buscar dispositivos: {response.status_code}")
+                logger.error(f"❌ Erro ao buscar dispositivos: {response.status_code}")
+                return
+            devices = response.json()
+            print(f"🔍 Dispositivos encontrados: {len(devices)}")
+            logger.info(f"📦 Dispositivos retornados: {len(devices)}")
+            if not devices:
+                print("⚠️ Nenhum dispositivo retornado pelo Traccar")
+                logger.warning("⚠️ Nenhum dispositivo retornado pelo Traccar")
+                return
+        except Exception as e:
+            print(f"❌ Exceção na requisição: {e}")
+            logger.error(f"❌ Exceção na requisição: {e}")
+            return
+
+    print("🔍 Conectando ao banco de dados local...")
+    async with AsyncSessionLocal() as db:
+        print("🔍 Buscando técnicos ativos...")
+        stmt = select(Technician).where(Technician.deleted_at.is_(None))
+        result = await db.execute(stmt)
+        technicians = result.scalars().all()
+        print(f"🔍 Técnicos ativos encontrados: {len(technicians)}")
+        logger.info(f"👤 Técnicos ativos encontrados: {len(technicians)}")
+
+        updated_count = 0
+        now = datetime.utcnow()
+
+        for tech in technicians:
+            if not tech.device_id:
+                print(f"⏭️ Técnico {tech.name} (ID {tech.id}) sem device_id, ignorado")
+                logger.debug(f"⏭️ Técnico {tech.name} sem device_id, ignorado")
+                continue
+
+            print(f"🔍 Processando técnico: {tech.name} (device_id: {tech.device_id})")
+            # Encontra dispositivo correspondente
+            device = next((d for d in devices if str(d.get("id")) == tech.device_id), None)
+            if not device:
+                print(f"⏭️ Técnico {tech.name} (device_id {tech.device_id}) não encontrado no Traccar")
+                logger.debug(f"⏭️ Técnico {tech.name} (device_id {tech.device_id}) não encontrado no Traccar")
+                continue
+
+            print(f"🔍 Dispositivo encontrado: {device.get('name')} (ID: {device.get('id')})")
+            # Converte lastUpdate para datetime naive
+            last_update_str = device.get("lastUpdate")
+            if last_update_str:
+                try:
+                    if last_update_str.endswith('Z'):
+                        last_update_str = last_update_str[:-1] + '+00:00'
+                    last_seen_dt = datetime.fromisoformat(last_update_str)
+                    tech.last_seen = last_seen_dt.replace(tzinfo=None)
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ Erro ao converter lastUpdate para {tech.name}: {e}")
+                    tech.last_seen = None
+            else:
+                tech.last_seen = None
+
+            # Define online se a última posição for recente (≤ 5 minutos)
+            if tech.last_seen:
+                seconds_since = (now - tech.last_seen).total_seconds()
+                tech.is_online = seconds_since <  1800 # 30 minutos
+                print(f"🔍 Última posição: {tech.last_seen} ({seconds_since:.0f}s atrás), online: {tech.is_online}")
+            else:
+                tech.is_online = False
+                print("🔍 Sem last_seen, definido como offline")
+
+            # Atualiza posição
+            position = device.get("position")
+            if position:
+                tech.latitude = position.get("latitude")
+                tech.longitude = position.get("longitude")
+                tech.accuracy = position.get("accuracy")
+                if position.get("batteryLevel") is not None:
+                    tech.battery_level = position.get("batteryLevel")
+                print(f"📍 Posição atualizada: ({tech.latitude}, {tech.longitude})")
+
+            updated_count += 1
+            print(f"✅ Técnico {tech.name} atualizado com sucesso!")
+
+        await db.commit()
+        print(f"✅ Sincronização concluída: {updated_count} técnicos atualizados")
+        logger.info(f"✅ Sincronização concluída: {updated_count} técnicos atualizados")

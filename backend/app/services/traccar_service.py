@@ -1,4 +1,3 @@
-## backend/app/services/traccar_service.py
 import httpx
 import logging
 from app.config import get_settings
@@ -75,3 +74,36 @@ class TraccarService:
             else:
                 logger.error(f"❌ Erro ao deletar dispositivo: {response.status_code} - {response.text}")
                 return False
+
+    async def get_device_by_unique_id(self, unique_id: str) -> dict | None:
+        """Busca um dispositivo no Traccar pelo uniqueId."""
+        if not self.session_cookie:
+            await self.authenticate()
+    
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_url}/devices",
+                cookies={"JSESSIONID": self.session_cookie}
+            )
+            if response.status_code == 200:
+                devices = response.json()
+                for device in devices:
+                    if device.get("uniqueId") == unique_id:
+                        return device
+            return None
+
+    async def get_all_devices(self) -> list:
+        """Retorna todos os dispositivos do Traccar."""
+        if not self.session_cookie:
+            await self.authenticate()
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_url}/devices",
+                cookies={"JSESSIONID": self.session_cookie}
+            )
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"Erro ao buscar dispositivos: {response.status_code}")
+                return []

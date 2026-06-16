@@ -17,44 +17,51 @@ router = APIRouter(prefix="/technicians", tags=["technicians"])
 logger = logging.getLogger(__name__)
 
 
+# backend/app/routes/technicians.py
+
 @router.post("", response_model=TechnicianResponse, status_code=status.HTTP_201_CREATED)
 async def create_technician(
     technician: TechnicianCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Criar novo técnico e dispositivo no Traccar"""
     try:
-        # Verificar se employee_id já existe
+        # Verifica se employee_id já existe no banco (não deletado)
         stmt = select(Technician).where(
-           Technician.employee_id == technician.employee_id,
-           Technician.deleted_at.is_(None)
-           )
+            Technician.employee_id == technician.employee_id,
+            Technician.deleted_at.is_(None)
+        )
         result = await db.execute(stmt)
         if result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="ID de funcionário já cadastrado",
             )
-        
-        # Criar dispositivo no Traccar
+
+        # Tenta buscar dispositivo no Traccar
         traccar_service = TraccarService()
-        traccar_device = await traccar_service.create_device(
-            name=technician.name,
-            unique_id=technician.employee_id
-        )
-        
-        # Criar técnico no banco
+        existing_device = await traccar_service.get_device_by_unique_id(technician.employee_id)
+
+        if existing_device:
+            device_id = str(existing_device.get("id"))
+        else:
+            # Cria novo dispositivo no Traccar
+            new_device = await traccar_service.create_device(
+                name=technician.name,
+                unique_id=technician.employee_id
+            )
+            device_id = str(new_device.get("id")) if new_device else None
+
+        # Prepara dados para inserção
         technician_data = technician.dict()
-        
-        if traccar_device:
-            technician_data["device_id"] = str(traccar_device.get("id"))
-        
+        technician_data["device_id"] = device_id
+
         db_technician = Technician(**technician_data)
         db.add(db_technician)
         await db.commit()
         await db.refresh(db_technician)
-        
+
         return TechnicianResponse.model_validate(db_technician)
+
     except HTTPException as e:
         raise e
     except Exception as e:

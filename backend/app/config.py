@@ -1,6 +1,6 @@
 ## backend/app/config.py
 import os
-
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional
 from functools import lru_cache
@@ -36,18 +36,18 @@ class Settings(BaseSettings):
     cors_methods: list = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     cors_headers: list = ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"]
     
-    # Traccar
-    traccar_url: str = os.getenv("TRACCAR_URL", "http://localhost:8082")
-    traccar_admin_user: str = "admin"
-    traccar_admin_password: str = "admin"
+    # Traccar – lido do .env via Field
+    traccar_url: str = Field(default="http://localhost:8082", env="TRACCAR_URL")
+    traccar_admin_user: str = Field(default="admin", env="TRACCAR_ADMIN_USER")
+    traccar_admin_password: str = Field(default="admin", env="TRACCAR_ADMIN_PASSWORD")
     
     # Redis
     redis_url: Optional[str] = "redis://localhost:6379"
     
     # Tracking
-    gps_update_interval_moving: int = 30  # seconds
-    gps_update_interval_stationary: int = 120  # seconds
-    battery_alert_threshold: int = 15  # percent
+    gps_update_interval_moving: int = 30
+    gps_update_interval_stationary: int = 120
+    battery_alert_threshold: int = 15
     
     # Data Retention
     position_retention_days: int = 90
