@@ -168,7 +168,7 @@ class TrackingService:
 
 
 # ============================================================
-# FUNÇÃO DE SINCRONIZAÇÃO COM O TRACCAR (COM LOGS E PRINTS DETALHADOS)
+# FUNÇÃO DE SINCRONIZAÇÃO COM O TRACCAR (COM BATERIA)
 # ============================================================
 
 async def update_all_technicians_positions():
@@ -243,6 +243,19 @@ async def update_all_technicians_positions():
                 continue
 
             print(f"🔍 Dispositivo encontrado: {device.get('name')} (ID: {device.get('id')})")
+
+            # Busca a posição mais recente do dispositivo
+            position = None
+            async with httpx.AsyncClient() as client:
+                pos_response = await client.get(
+                    f"{traccar.api_url}/positions?deviceId={device['id']}&limit=1",
+                    cookies={"JSESSIONID": traccar.session_cookie}
+                )
+                if pos_response.status_code == 200:
+                    positions = pos_response.json()
+                    if positions:
+                        position = positions[0]  # Última posição
+
             # Converte lastUpdate para datetime naive
             last_update_str = device.get("lastUpdate")
             if last_update_str:
@@ -257,24 +270,31 @@ async def update_all_technicians_positions():
             else:
                 tech.last_seen = None
 
-            # Define online se a última posição for recente (≤ 5 minutos)
+            # Define online se a última posição for recente (≤ 30 minutos)
             if tech.last_seen:
                 seconds_since = (now - tech.last_seen).total_seconds()
-                tech.is_online = seconds_since <  1800 # 30 minutos
+                tech.is_online = seconds_since < 1800  # 30 minutos
                 print(f"🔍 Última posição: {tech.last_seen} ({seconds_since:.0f}s atrás), online: {tech.is_online}")
             else:
                 tech.is_online = False
                 print("🔍 Sem last_seen, definido como offline")
 
-            # Atualiza posição
-            position = device.get("position")
+            # Atualiza posição e bateria a partir da posição buscada
             if position:
                 tech.latitude = position.get("latitude")
                 tech.longitude = position.get("longitude")
                 tech.accuracy = position.get("accuracy")
-                if position.get("batteryLevel") is not None:
-                    tech.battery_level = position.get("batteryLevel")
+                # Bateria está dentro de 'attributes'
+                attributes = position.get("attributes", {})
+                battery = attributes.get("batteryLevel") or attributes.get("battery")
+                if battery is not None:
+                    tech.battery_level = battery
+                    print(f"🔋 {tech.name} - Bateria: {battery}%")
+                else:
+                    print(f"⚠️ Bateria não disponível para {tech.name}")
                 print(f"📍 Posição atualizada: ({tech.latitude}, {tech.longitude})")
+            else:
+                print(f"⚠️ Sem posição para {tech.name} (positionId: {device.get('positionId')})")
 
             updated_count += 1
             print(f"✅ Técnico {tech.name} atualizado com sucesso!")
