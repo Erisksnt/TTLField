@@ -262,8 +262,8 @@ async def update_all_technicians_positions():
                 try:
                     if last_update_str.endswith('Z'):
                         last_update_str = last_update_str[:-1] + '+00:00'
-                    last_seen_dt = datetime.fromisoformat(last_update_str)
-                    tech.last_seen = datetime.now(timezone.utc)
+                    last_seen_dt = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
+                    tech.last_seen = last_seen_dt.replace(tzinfo=None)
                 except (ValueError, TypeError) as e:
                     print(f"⚠️ Erro ao converter lastUpdate para {tech.name}: {e}")
                     tech.last_seen = None
