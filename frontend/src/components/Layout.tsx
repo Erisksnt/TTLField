@@ -1,18 +1,8 @@
-// frontend/src/components/Layout.tsx (versão com logo)
+// frontend/src/components/Layout.tsx
 import { ReactNode, useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
-import {
-  Menu,
-  X,
-  Home,
-  Users,
-  AlertCircle,
-  MapPin,
-  LogOut,
-} from 'lucide-react'
-import logoMenu from '@/assets/img/logo-menu.png'
-import logoFooter from '@/assets/img/logo-footer.png'
+import { Menu, X, Home, Users, AlertCircle, MapPin, LogOut} from 'lucide-react'
 
 interface LayoutProps {
   children: ReactNode
@@ -73,7 +63,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="p-4 flex items-center justify-between">
           {sidebarOpen && (
             <img 
-              src={logoFooter} 
+              src="/logo-side.png"
               alt="Total Links Tracker" 
               className="h-14 w-auto"
             />
@@ -134,7 +124,7 @@ export default function Layout({ children }: LayoutProps) {
             </button>
             <div className="text-gray-700">
               <img 
-                src={logoMenu} 
+                src="/logo-menu.png"
                 alt="Total Links Tracker" 
                 className="h-8 md:h-14 w-auto"
               />

@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
-import logoMenu from '@/assets/img/logo-menu.png'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -67,10 +66,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#0b1e2d] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-8">
-        {/* LOGO - ADICIONADO */}
+        {/* LOGO - caminho absoluto */}
         <div className="flex justify-center mb-6">
           <img 
-            src={logoMenu} 
+            src="/logo-menu.png" 
             alt="Total Links Tracker" 
             className="h-18 w-auto"
           />

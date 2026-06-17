@@ -133,7 +133,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Mapa em Tempo Real</h2>
+          <h2 className="text-xl font-bold mb-4">Mapa</h2>
           {isLoading ? (
             <div className="flex items-center justify-center h-96">
               <Loader className="w-8 h-8 animate-spin text-blue-600" />
