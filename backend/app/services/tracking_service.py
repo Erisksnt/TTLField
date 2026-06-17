@@ -4,7 +4,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc, and_
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.models.position import Position
 from app.models.technician import Technician
 from app.schemas.position import PositionCreate, PositionResponse
@@ -263,7 +263,7 @@ async def update_all_technicians_positions():
                     if last_update_str.endswith('Z'):
                         last_update_str = last_update_str[:-1] + '+00:00'
                     last_seen_dt = datetime.fromisoformat(last_update_str)
-                    tech.last_seen = last_seen_dt.replace(tzinfo=None)
+                    tech.last_seen = datetime.now(timezone.utc)
                 except (ValueError, TypeError) as e:
                     print(f"⚠️ Erro ao converter lastUpdate para {tech.name}: {e}")
                     tech.last_seen = None
