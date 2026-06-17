@@ -208,16 +208,16 @@ export default function DashboardPage() {
                       position={[technician.latitude!, technician.longitude!]}
                       icon={customIcon}
                     >
-                      <Popup>
-                        <div className="text-sm">
-                          <p className="font-semibold">{technician.name}</p>
-                          <p className="text-gray-600">{technician.employee_id}</p>
-                          <p className="text-gray-600">Bateria: {technician.battery_level || 'N/A'}%</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Última atualização: {technician.last_seen ? new Date(technician.last_seen).toLocaleTimeString() : 'N/A'}
-                          </p>
-                        </div>
-                      </Popup>
+                        <Tooltip sticky>
+                          <div className="text-sm">
+                            <p className="font-semibold">{technician.name}</p>
+                            <p className="text-gray-600">{technician.employee_id}</p>
+                            <p className="text-gray-600">Bateria: {technician.battery_level || 'N/A'}%</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Última atualização:{technician.last_seen ? new Date(technician.last_seen + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }): 'N/A'}
+                            </p>
+                          </div>
+                        </Tooltip>
                     </Marker>
                   ))}
               </MapContainer>
