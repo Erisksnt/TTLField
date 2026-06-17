@@ -1,6 +1,6 @@
 // frontend/src/pages/DashboardPage.tsx
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, Circle, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Tooltip, Circle } from 'react-leaflet'
 import { Icon } from 'leaflet'
 import Layout from '@/components/Layout'
 import api from '@/services/api'
@@ -15,6 +15,7 @@ interface PositionData {
   battery_level?: number
 }
 
+// Ícone personalizado
 const customIcon = new Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -24,9 +25,24 @@ const customIcon = new Icon({
   shadowSize: [41, 41],
 })
 
+// Função para buscar endereço a partir das coordenadas
+const fetchAddress = async (lat: number, lng: number): Promise<string> => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+    )
+    const data = await response.json()
+    return data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+  } catch (error) {
+    console.error('Erro ao buscar endereço:', error)
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+  }
+}
+
 export default function DashboardPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [geofences, setGeofences] = useState<Geofence[]>([])
+  const [addresses, setAddresses] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [mapError, setMapError] = useState(false)
   const [mapKey, setMapKey] = useState(0)
@@ -36,6 +52,13 @@ export default function DashboardPage() {
     try {
       const data = await api.getTechnicians(true)
       setTechnicians(data)
+      // Buscar endereços para técnicos online com coordenadas
+      data.forEach(async (tech) => {
+        if (tech.latitude && tech.longitude && !addresses[tech.id]) {
+          const addr = await fetchAddress(tech.latitude, tech.longitude)
+          setAddresses(prev => ({ ...prev, [tech.id]: addr }))
+        }
+      })
     } catch (error) {
       console.error('Erro ao carregar técnicos:', error)
     }
@@ -52,13 +75,12 @@ export default function DashboardPage() {
     }
   }
 
-  // Carregar dados ao iniciar
   useEffect(() => {
     fetchTechnicians()
     fetchGeofences()
   }, [])
 
-  // Atualizar posições via WebSocket
+  // Atualizar posições via WebSocket e buscar endereço para novas posições
   useEffect(() => {
     Object.entries(lastPosition).forEach(([techId, position]) => {
       const posData = position as PositionData
@@ -67,6 +89,12 @@ export default function DashboardPage() {
           ? { ...tech, latitude: posData.latitude, longitude: posData.longitude }
           : tech
       ))
+      // Buscar endereço se houver coordenadas e ainda não tiver
+      if (posData.latitude && posData.longitude && !addresses[techId]) {
+        fetchAddress(posData.latitude, posData.longitude).then(addr => {
+          setAddresses(prev => ({ ...prev, [techId]: addr }))
+        })
+      }
     })
   }, [lastPosition])
 
@@ -99,12 +127,10 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600">Monitoramento em tempo real</p>
           </div>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-1 md:gap-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base"
-          >
+            className="flex items-center gap-1 md:gap-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition text-sm md:text-base">
             <RefreshCw size={14} className="md:w-4 md:h-4" />
             <span className="hidden sm:inline">Recarregar</span>
           </button>
@@ -115,17 +141,14 @@ export default function DashboardPage() {
             <h3 className="text-gray-600 text-sm font-medium">Técnicos Online</h3>
             <p className="text-3xl font-bold text-blue-600 mt-2">{onlineTechnicians.length}</p>
           </div>
-
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-gray-600 text-sm font-medium">Técnicos Total</h3>
             <p className="text-3xl font-bold text-gray-700 mt-2">{technicians.length}</p>
           </div>
-
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-gray-600 text-sm font-medium">Bateria Baixa</h3>
             <p className="text-3xl font-bold text-yellow-600 mt-2">{lowBattery.length}</p>
           </div>
-
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-gray-600 text-sm font-medium">Geofences</h3>
             <p className="text-3xl font-bold text-purple-600 mt-2">{geofences.filter(g => g.is_active).length}</p>
@@ -133,7 +156,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Mapa</h2>
+          <h2 className="text-xl font-bold mb-4">Posições Tempo Real</h2>
           {isLoading ? (
             <div className="flex items-center justify-center h-96">
               <Loader className="w-8 h-8 animate-spin text-blue-600" />
@@ -167,7 +190,7 @@ export default function DashboardPage() {
                   }}
                 />
                 
-                {/* Geofences - Círculos */}
+                {/* Geofences */}
                 {geofences.map((geofence) => {
                   if (geofence.geofence_type === 'circle' && geofence.center_latitude && geofence.center_longitude) {
                     return (
@@ -199,7 +222,7 @@ export default function DashboardPage() {
                   return null
                 })}
                 
-                {/* Técnicos */}
+                {/* Posição Técnicos dentro do mapa*/}
                 {onlineTechnicians
                   .filter((t) => t.latitude && t.longitude)
                   .map((technician) => (
@@ -208,16 +231,18 @@ export default function DashboardPage() {
                       position={[technician.latitude!, technician.longitude!]}
                       icon={customIcon}
                     >
-                        <Tooltip sticky>
-                          <div className="text-sm">
-                            <p className="font-semibold">{technician.name}</p>
-                            <p className="text-gray-600">{technician.employee_id}</p>
-                            <p className="text-gray-600">Bateria: {technician.battery_level || 'N/A'}%</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Última atualização:{technician.last_seen ? new Date(technician.last_seen + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }): 'N/A'}
-                            </p>
-                          </div>
-                        </Tooltip>
+                      <Tooltip sticky>
+                        <div className="text-sm">
+                          <p className="font-semibold">{technician.name}</p>
+                          <p className="text-gray-600">{technician.employee_id}</p>
+                          <p className="text-gray-600">Bateria: {technician.battery_level || 'N/A'}%</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Última atualização: {technician.last_seen 
+                              ? new Date(technician.last_seen + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) 
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </Tooltip>
                     </Marker>
                   ))}
               </MapContainer>
@@ -225,6 +250,7 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Técnicos Online */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <MapPin className="w-5 h-5 text-green-600" />
@@ -236,11 +262,19 @@ export default function DashboardPage() {
             ) : (
               onlineTechnicians.map((technician) => (
                 <div key={technician.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900">{technician.name}</p>
                     <p className="text-sm text-gray-600">{technician.employee_id}</p>
+                    {addresses[technician.id] && (
+                      <p 
+                        className="text-xs text-gray-500 mt-1 truncate max-w-[300px]" 
+                        title={addresses[technician.id]}
+                      >
+                        📍 {addresses[technician.id]}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-shrink-0 ml-4">
                     <span className="text-sm text-gray-600">
                       🔋 {technician.battery_level || 'N/A'}%
                     </span>
