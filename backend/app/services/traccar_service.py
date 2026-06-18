@@ -1,3 +1,5 @@
+## backend/app/services/traccar_service.py
+from datetime import datetime, timezone
 import httpx
 import logging
 from app.config import get_settings
@@ -25,7 +27,6 @@ class TraccarService:
                 f"{self.api_url}/session",
                 data=data
             )
-            
             if response.status_code == 200:
                 self.session_cookie = response.cookies.get("JSESSIONID")
                 logger.info(f"✅ Autenticado no Traccar")
@@ -38,7 +39,6 @@ class TraccarService:
         """Criar dispositivo no Traccar"""
         if not self.session_cookie:
             await self.authenticate()
-        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.api_url}/devices",
@@ -49,7 +49,6 @@ class TraccarService:
                 },
                 cookies={"JSESSIONID": self.session_cookie}
             )
-            
             if response.status_code == 200:
                 logger.info(f"✅ Dispositivo criado: {name} (ID: {unique_id})")
                 return response.json()
@@ -61,13 +60,11 @@ class TraccarService:
         """Deletar dispositivo no Traccar"""
         if not self.session_cookie:
             await self.authenticate()
-        
         async with httpx.AsyncClient() as client:
             response = await client.delete(
                 f"{self.api_url}/devices/{device_id}",
                 cookies={"JSESSIONID": self.session_cookie}
             )
-            
             if response.status_code == 204:
                 logger.info(f"✅ Dispositivo deletado no Traccar: {device_id}")
                 return True
@@ -79,7 +76,6 @@ class TraccarService:
         """Busca um dispositivo no Traccar pelo uniqueId."""
         if not self.session_cookie:
             await self.authenticate()
-    
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.api_url}/devices",
@@ -96,7 +92,6 @@ class TraccarService:
         """Retorna todos os dispositivos do Traccar."""
         if not self.session_cookie:
             await self.authenticate()
-        
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{self.api_url}/devices",
@@ -106,4 +101,35 @@ class TraccarService:
                 return response.json()
             else:
                 logger.error(f"Erro ao buscar dispositivos: {response.status_code}")
+                return []
+    
+    async def get_device_positions(self, device_id: int, start_time: datetime, end_time: datetime) -> list:
+        """Busca posições históricas de um dispositivo no período."""
+        if not self.session_cookie:
+            await self.authenticate()
+
+        # Converter para UTC e formato ISO (com timezone)
+        start_utc = start_time.replace(tzinfo=timezone.utc)
+        end_utc = end_time.replace(tzinfo=timezone.utc)
+        start_str = start_utc.isoformat()
+        end_str = end_utc.isoformat()
+
+        logger.info(f"📡 Buscando posições: deviceId={device_id}, from={start_str}, to={end_str}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_url}/positions",
+                params={
+                    "deviceId": device_id,
+                    "from": start_str,
+                    "to": end_str
+                },
+                cookies={"JSESSIONID": self.session_cookie}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"✅ Posições encontradas: {len(data)}")
+                return data
+            else:
+                logger.error(f"❌ Erro ao buscar posições históricas: {response.status_code} - {response.text}")
                 return []

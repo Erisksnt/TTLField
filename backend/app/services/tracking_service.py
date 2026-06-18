@@ -4,7 +4,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import desc, and_
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from app.models.position import Position
 from app.models.technician import Technician
 from app.schemas.position import PositionCreate, PositionResponse
@@ -18,26 +18,16 @@ logger = logging.getLogger(__name__)
 class TrackingService:
     @staticmethod
     def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
-        """
-        Calcular distância entre dois pontos lat/lon em metros
-        Fórmula haversine
-        """
         lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
         dlon = lon2 - lon1
         dlat = lat2 - lat1
         a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
         c = 2 * asin(sqrt(a))
-        r = 6371000  # Raio da Terra em metros
+        r = 6371000
         return c * r
 
     @staticmethod
-    async def create_position(
-        db: AsyncSession,
-        technician_id: str,
-        device_id: str,
-        position: PositionCreate,
-    ) -> Position:
-        """Criar nova posição e atualizar status do técnico"""
+    async def create_position(db, technician_id, device_id, position):
         db_position = Position(
             technician_id=technician_id,
             device_id=device_id,
@@ -52,14 +42,10 @@ class TrackingService:
             provider=position.provider,
             timestamp=datetime.utcnow(),
         )
-        
         db.add(db_position)
-        
-        # Atualizar localização do técnico
         stmt = select(Technician).where(Technician.id == technician_id)
         result = await db.execute(stmt)
         technician = result.scalar_one_or_none()
-        
         if technician:
             technician.latitude = position.latitude
             technician.longitude = position.longitude
@@ -67,51 +53,28 @@ class TrackingService:
             technician.battery_level = position.battery_level
             technician.last_seen = datetime.utcnow()
             technician.is_online = True
-        
         await db.commit()
         await db.refresh(db_position)
         return db_position
 
     @staticmethod
-    async def get_technician_positions(
-        db: AsyncSession,
-        technician_id: str,
-        hours: int = 24,
-        limit: int = 1000,
-    ) -> list[PositionResponse]:
-        """Obter histórico de posições do técnico"""
+    async def get_technician_positions(db, technician_id, hours=24, limit=1000):
         time_ago = datetime.utcnow() - timedelta(hours=hours)
-        
         stmt = (
             select(Position)
-            .where(
-                and_(
-                    Position.technician_id == technician_id,
-                    Position.timestamp >= time_ago,
-                )
-            )
+            .where(and_(Position.technician_id == technician_id, Position.timestamp >= time_ago))
             .order_by(desc(Position.timestamp))
             .limit(limit)
         )
-        
         result = await db.execute(stmt)
         positions = result.scalars().all()
         return [PositionResponse.model_validate(p) for p in positions]
 
     @staticmethod
-    async def get_all_technicians_current_position(
-        db: AsyncSession,
-    ) -> list[dict]:
-        """Obter posição atual de todos os técnicos online"""
-        stmt = (
-            select(Technician)
-            .where(Technician.is_online == True)
-            .order_by(Technician.name)
-        )
-        
+    async def get_all_technicians_current_position(db):
+        stmt = select(Technician).where(Technician.is_online == True).order_by(Technician.name)
         result = await db.execute(stmt)
         technicians = result.scalars().all()
-        
         return [
             {
                 "id": t.id,
@@ -127,56 +90,30 @@ class TrackingService:
         ]
 
     @staticmethod
-    async def calculate_route_distance(
-        db: AsyncSession,
-        technician_id: str,
-        start_time: datetime,
-        end_time: datetime,
-    ) -> float:
-        """Calcular distância total percorrida num período"""
+    async def calculate_route_distance(db, technician_id, start_time, end_time):
         stmt = (
             select(Position)
-            .where(
-                and_(
-                    Position.technician_id == technician_id,
-                    Position.timestamp >= start_time,
-                    Position.timestamp <= end_time,
-                )
-            )
+            .where(and_(Position.technician_id == technician_id, Position.timestamp >= start_time, Position.timestamp <= end_time))
             .order_by(Position.timestamp)
         )
-        
         result = await db.execute(stmt)
         positions = result.scalars().all()
-        
         if len(positions) < 2:
             return 0.0
-        
         total_distance = 0.0
         for i in range(len(positions) - 1):
             curr = positions[i]
             next_pos = positions[i + 1]
-            distance = TrackingService.haversine(
-                curr.longitude,
-                curr.latitude,
-                next_pos.longitude,
-                next_pos.latitude,
-            )
+            distance = TrackingService.haversine(curr.longitude, curr.latitude, next_pos.longitude, next_pos.latitude)
             total_distance += distance
-        
-        return total_distance / 1000  # Converter para km
+        return total_distance / 1000
 
-
-# ============================================================
-# FUNÇÃO DE SINCRONIZAÇÃO COM O TRACCAR (COM BATERIA)
-# ============================================================
 
 async def update_all_technicians_positions():
-    """Busca dispositivos no Traccar e atualiza técnicos no banco local."""
     print("🔍 Entrou na função de sincronização!")
     logger.info("🔄 Iniciando sincronização com Traccar...")
     traccar = TraccarService()
-    
+
     print("🔍 Tentando autenticar no Traccar...")
     try:
         auth_ok = await traccar.authenticate()
@@ -194,10 +131,7 @@ async def update_all_technicians_positions():
     print("🔍 Buscando dispositivos no Traccar...")
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(
-                f"{traccar.api_url}/devices",
-                cookies={"JSESSIONID": traccar.session_cookie}
-            )
+            response = await client.get(f"{traccar.api_url}/devices", cookies={"JSESSIONID": traccar.session_cookie})
             print(f"🔍 Status da resposta /devices: {response.status_code}")
             logger.info(f"📊 Status da requisição /devices: {response.status_code}")
             if response.status_code != 200:
@@ -226,6 +160,7 @@ async def update_all_technicians_positions():
         logger.info(f"👤 Técnicos ativos encontrados: {len(technicians)}")
 
         updated_count = 0
+        positions_saved = 0
         now = datetime.utcnow()
 
         for tech in technicians:
@@ -235,7 +170,6 @@ async def update_all_technicians_positions():
                 continue
 
             print(f"🔍 Processando técnico: {tech.name} (device_id: {tech.device_id})")
-            # Encontra dispositivo correspondente
             device = next((d for d in devices if str(d.get("id")) == tech.device_id), None)
             if not device:
                 print(f"⏭️ Técnico {tech.name} (device_id {tech.device_id}) não encontrado no Traccar")
@@ -244,7 +178,7 @@ async def update_all_technicians_positions():
 
             print(f"🔍 Dispositivo encontrado: {device.get('name')} (ID: {device.get('id')})")
 
-            # Busca a posição mais recente do dispositivo
+            # Busca posição mais recente
             position = None
             async with httpx.AsyncClient() as client:
                 pos_response = await client.get(
@@ -252,17 +186,17 @@ async def update_all_technicians_positions():
                     cookies={"JSESSIONID": traccar.session_cookie}
                 )
                 if pos_response.status_code == 200:
-                    positions = pos_response.json()
-                    if positions:
-                        position = positions[0]  # Última posição
+                    positions_list = pos_response.json()
+                    if positions_list:
+                        position = positions_list[0]
 
-            # Converte lastUpdate para datetime naive
+            # Atualiza last_seen e online
             last_update_str = device.get("lastUpdate")
             if last_update_str:
                 try:
                     if last_update_str.endswith('Z'):
                         last_update_str = last_update_str[:-1] + '+00:00'
-                    last_seen_dt = datetime.fromisoformat(last_update_str.replace('Z', '+00:00'))
+                    last_seen_dt = datetime.fromisoformat(last_update_str)
                     tech.last_seen = last_seen_dt.replace(tzinfo=None)
                 except (ValueError, TypeError) as e:
                     print(f"⚠️ Erro ao converter lastUpdate para {tech.name}: {e}")
@@ -270,21 +204,19 @@ async def update_all_technicians_positions():
             else:
                 tech.last_seen = None
 
-            # Define online se a última posição for recente (≤ 30 minutos)
             if tech.last_seen:
                 seconds_since = (now - tech.last_seen).total_seconds()
-                tech.is_online = seconds_since < 1800  # 30 minutos
+                tech.is_online = seconds_since < 1800
                 print(f"🔍 Última posição: {tech.last_seen} ({seconds_since:.0f}s atrás), online: {tech.is_online}")
             else:
                 tech.is_online = False
                 print("🔍 Sem last_seen, definido como offline")
 
-            # Atualiza posição e bateria a partir da posição buscada
+            # Atualiza dados do técnico e salva posição (se nova)
             if position:
                 tech.latitude = position.get("latitude")
                 tech.longitude = position.get("longitude")
                 tech.accuracy = position.get("accuracy")
-                # Bateria está dentro de 'attributes'
                 attributes = position.get("attributes", {})
                 battery = attributes.get("batteryLevel") or attributes.get("battery")
                 if battery is not None:
@@ -293,6 +225,47 @@ async def update_all_technicians_positions():
                 else:
                     print(f"⚠️ Bateria não disponível para {tech.name}")
                 print(f"📍 Posição atualizada: ({tech.latitude}, {tech.longitude})")
+
+                # Prepara timestamp
+                pos_timestamp = position.get("fixTime") or position.get("serverTime") or datetime.utcnow()
+                if isinstance(pos_timestamp, str):
+                    pos_timestamp = datetime.fromisoformat(pos_timestamp.replace('Z', '+00:00')).replace(tzinfo=None)
+                elif isinstance(pos_timestamp, datetime) and pos_timestamp.tzinfo is not None:
+                    pos_timestamp = pos_timestamp.replace(tzinfo=None)
+
+                # 🔥 VERIFICA SE JÁ EXISTE POSIÇÃO COM ESTE TIMESTAMP PARA ESTE TÉCNICO
+                existing_stmt = select(Position).where(
+                    and_(
+                        Position.technician_id == tech.id,
+                        Position.timestamp == pos_timestamp
+                    )
+                )
+                existing_result = await db.execute(existing_stmt)
+                if existing_result.scalar_one_or_none():
+                    print(f"⏭️ Posição já existe para {tech.name} em {pos_timestamp} (ignorando duplicata)")
+                else:
+                    # Salva posição (nova)
+                    speed_ms = position.get("speed")
+                    speed_kmh = speed_ms * 3.6 if speed_ms is not None else None
+                    new_position = Position(
+                        technician_id=tech.id,
+                        device_id=tech.device_id,
+                        latitude=position.get("latitude"),
+                        longitude=position.get("longitude"),
+                        accuracy=position.get("accuracy"),
+                        altitude=position.get("altitude"),
+                        speed=speed_kmh,
+                        heading=position.get("course"),
+                        battery_level=battery,
+                        battery_status=attributes.get("batteryStatus"),
+                        provider=position.get("protocol", "traccar"),
+                        timestamp=pos_timestamp,
+                        received_at=datetime.utcnow(),
+                        is_valid=position.get("valid", True),
+                    )
+                    db.add(new_position)
+                    positions_saved += 1
+                    print(f"💾 Posição salva para {tech.name} (timestamp: {pos_timestamp})")
             else:
                 print(f"⚠️ Sem posição para {tech.name} (positionId: {device.get('positionId')})")
 
@@ -300,5 +273,5 @@ async def update_all_technicians_positions():
             print(f"✅ Técnico {tech.name} atualizado com sucesso!")
 
         await db.commit()
-        print(f"✅ Sincronização concluída: {updated_count} técnicos atualizados")
-        logger.info(f"✅ Sincronização concluída: {updated_count} técnicos atualizados")
+        print(f"✅ Sincronização concluída: {updated_count} técnicos atualizados, {positions_saved} posições salvas")
+        logger.info(f"✅ Sincronização concluída: {updated_count} técnicos atualizados, {positions_saved} posições salvas")

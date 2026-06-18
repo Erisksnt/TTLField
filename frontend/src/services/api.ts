@@ -197,6 +197,62 @@ class ApiService {
     const response = await this.api.get('/health')
     return response.data
   }
+
+  // Reports
+  async getReportSummary(
+    technicianId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    const response = await this.api.get(`/reports/summary/${technicianId}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  }
+
+  async getRoute(
+    technicianId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    const response = await this.api.get(`/reports/route/${technicianId}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  }
+
+  async getGeofenceEvents(
+    technicianId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    const response = await this.api.get(`/reports/geofence-events/${technicianId}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  }
+
+  async getStops(
+    technicianId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    const response = await this.api.get(`/reports/stops/${technicianId}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  }
+
+  async getAlertsReport(
+    technicianId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<any> {
+    const response = await this.api.get(`/reports/alerts/${technicianId}`, {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  }
 }
 
 export default new ApiService()
