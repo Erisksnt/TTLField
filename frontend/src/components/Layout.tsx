@@ -64,7 +64,7 @@ export default function Layout({ children }: LayoutProps) {
           {sidebarOpen && (
             <img 
               src="/logo-side.png"
-              alt="Total Links Tracker" 
+              alt="Total Links - Rastreamento em Tempo Real" 
               className="h-14 w-auto"
             />
           )}
@@ -126,7 +126,7 @@ export default function Layout({ children }: LayoutProps) {
               <img 
                 src="/logo-menu.png"
                 alt="Total Links Tracker" 
-                className="h-8 md:h-14 w-auto"
+                className="h-20 md:h-24 w-auto"
               />
             </div>
           </div>
