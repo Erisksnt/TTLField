@@ -10,6 +10,7 @@ import TechniciansPage from '@/pages/TechniciansPage'
 import AlertsPage from '@/pages/AlertsPage'
 import GeofencesPage from '@/pages/GeofencesPage'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import ReportsPage from '@/pages/ReportsPage'
 import 'leaflet/dist/leaflet.css'
 import './index.css'
 
@@ -80,6 +81,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <GeofencesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
               </ProtectedRoute>
             }
           />

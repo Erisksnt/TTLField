@@ -2,7 +2,7 @@
 import { ReactNode, useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
-import { Menu, X, Home, Users, AlertCircle, MapPin, LogOut} from 'lucide-react'
+import { Menu, X, Home, Users, AlertCircle, MapPin, LogOut, FileText} from 'lucide-react'
 
 interface LayoutProps {
   children: ReactNode
@@ -40,6 +40,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/technicians', label: 'Técnicos', icon: Users },
     { path: '/alerts', label: 'Alertas', icon: AlertCircle },
     { path: '/geofences', label: 'Geofences', icon: MapPin },
+    { path: '/reports', label: 'Relatórios', icon: FileText },
   ]
 
   const isActive = (path: string) => location.pathname === path
