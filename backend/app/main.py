@@ -7,13 +7,14 @@ from contextlib import asynccontextmanager
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import logging
 import traceback
-import asyncio  # ← ADICIONADO
+import asyncio
 
 from app.config import get_settings
 from app.database import init_db, close_db, get_db
-from app.routes import auth, technicians, positions, geofences, websocket
+from app.routes import auth, technicians, positions, geofences, websocket, reports
 from app.services.logout_service import LogoutService
 from app.utils.rate_limit import setup_rate_limit, limiter
+
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -130,6 +131,7 @@ app.include_router(technicians.router)
 app.include_router(positions.router)
 app.include_router(geofences.router)
 app.include_router(websocket.router)
+app.include_router(reports.router)
 
 
 # ============================================
