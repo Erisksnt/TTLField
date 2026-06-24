@@ -41,3 +41,8 @@ Thumbs.db
 
 # Docker
 .docker-compose.override.yml
+
+# Edit Traccar XML
+/traccar
+/traccar/conf/traccar.xml
+/traccar/conf/database_producao.mv.db
