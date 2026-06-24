@@ -1,10 +1,8 @@
 // frontend/src/components/reports/RouteTab.tsx
 import { MapContainer, TileLayer, Polyline, Marker, Tooltip } from 'react-leaflet'
 import { Icon } from 'leaflet'
-import { useState, useEffect } from 'react'
+import { Fragment } from 'react'
 
-
-// Ícone para início (verde) e fim (vermelho)
 const startIcon = new Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -28,25 +26,18 @@ interface RoutePoint {
   longitude: number
   timestamp: string
   speed?: number
+  journey_index?: number | null
+  is_journey_start?: boolean
+  is_journey_end?: boolean
+  segment_distance_km?: number
+  segment_time_seconds?: number
+  segment_speed_kmh?: number
 }
 
 interface RouteTabProps {
   data?: RoutePoint[]
 }
 
-// Função haversine para calcular distância entre dois pontos (em km)
-const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371 // raio da Terra em km
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLon = (lon2 - lon1) * Math.PI / 180
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  return R * c
-}
-
-// Formatar tempo em horas e minutos
 const formatDuration = (seconds: number): string => {
   if (seconds < 60) return `${Math.round(seconds)}s`
   const minutes = Math.floor(seconds / 60)
@@ -56,58 +47,57 @@ const formatDuration = (seconds: number): string => {
   return mins === 0 ? `${hours}h` : `${hours}h ${mins}min`
 }
 
+const formatDateTime = (timestamp: string): string => {
+  return new Date(timestamp).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+  })
+}
+
 export default function RouteTab({ data }: RouteTabProps) {
   if (!data || data.length < 2) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">Nenhuma rota encontrada para o período selecionado</p>
-        <p className="text-sm mt-1">Selecione um técnico e um período com pelo menos duas posições registradas.</p>
+        <p className="text-lg">Nenhuma rota encontrada para o periodo selecionado</p>
+        <p className="text-sm mt-1">Selecione um tecnico e um periodo com pelo menos duas posicoes registradas.</p>
       </div>
     )
   }
 
-  // Converter pontos para formato [lat, lng]
-  const positions: [number, number][] = data.map(p => [p.latitude, p.longitude])
-  const startPoint = positions[0]
-  const endPoint = positions[positions.length - 1]
+  const journeys = data.reduce((acc, point) => {
+    const key = point.journey_index ?? 0
+    if (!acc[key]) acc[key] = []
+    acc[key].push(point)
+    return acc
+  }, {} as Record<number, RoutePoint[]>)
 
-  // Calcular centro do mapa
-  const centerLat = data.reduce((sum, p) => sum + p.latitude, 0) / data.length
-  const centerLng = data.reduce((sum, p) => sum + p.longitude, 0) / data.length
+  const journeyEntries = Object.entries(journeys)
+    .map(([journeyIndex, points]) => ({ journeyIndex: Number(journeyIndex), points }))
+    .filter((journey) => journey.points.length >= 2)
 
-  // Calcular métricas
+  const centerLat = data.reduce((sum, point) => sum + point.latitude, 0) / data.length
+  const centerLng = data.reduce((sum, point) => sum + point.longitude, 0) / data.length
+
   let totalDistance = 0
   let totalTime = 0
   let maxSpeed = 0
-  let avgSpeed = 0
 
-  for (let i = 1; i < data.length; i++) {
-    const prev = data[i-1]
-    const curr = data[i]
-    const dist = haversineDistance(prev.latitude, prev.longitude, curr.latitude, curr.longitude)
-    totalDistance += dist
+  data.forEach((point) => {
+    const distance = point.segment_distance_km ?? 0
+    const time = point.segment_time_seconds ?? 0
+    const speed = point.segment_speed_kmh ?? 0
+    totalDistance += distance
+    totalTime += time
+    if (speed > maxSpeed) maxSpeed = speed
+  })
 
-    // Tempo entre pontos (em segundos)
-    const tPrev = new Date(prev.timestamp).getTime()
-    const tCurr = new Date(curr.timestamp).getTime()
-    const timeDiff = (tCurr - tPrev) / 1000 // segundos
-    totalTime += timeDiff
-
-    // Velocidade (km/h)
-    if (timeDiff > 0) {
-      const speed = (dist / timeDiff) * 3600 // km/h
-      if (speed > maxSpeed) maxSpeed = speed
-    }
-  }
-
-  avgSpeed = totalTime > 0 ? (totalDistance / totalTime) * 3600 : 0
+  const avgSpeed = totalTime > 0 ? (totalDistance / totalTime) * 3600 : 0
 
   return (
     <div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
         <p className="text-sm text-blue-700">
-          <strong>🗺️ Rota percorrida</strong> – {data.length} pontos registrados.
-          Distância total: <strong>{totalDistance.toFixed(2)} km</strong>
+          <strong>Rota percorrida</strong> - {data.length} pontos em {journeyEntries.length} viagem(ns).
+          Distancia total: <strong>{totalDistance.toFixed(2)} km</strong>
         </p>
       </div>
 
@@ -122,53 +112,59 @@ export default function RouteTab({ data }: RouteTabProps) {
             attribution='&copy; OpenStreetMap contributors'
           />
 
-          {/* Linha da rota */}
-          <Polyline
-            positions={positions}
-            color="#3b82f6"
-            weight={4}
-            opacity={0.8}
-          />
+          {journeyEntries.map(({ journeyIndex, points }) => {
+            const positions: [number, number][] = points.map(point => [point.latitude, point.longitude])
+            const start = points[0]
+            const end = points[points.length - 1]
+            const label = journeyIndex > 0 ? `Viagem ${journeyIndex}` : 'Viagem'
 
-          {/* Ponto de início */}
-          <Marker position={startPoint} icon={startIcon}>
-            <Tooltip sticky>
-              <div className="text-sm">
-                <p className="font-semibold text-green-700">Início</p>
-                <p className="text-gray-600">{new Date(data[0].timestamp).toLocaleString('pt-BR')}</p>
-              </div>
-            </Tooltip>
-          </Marker>
+            return (
+              <Fragment key={journeyIndex}>
+                <Polyline
+                  positions={positions}
+                  color="#3b82f6"
+                  weight={4}
+                  opacity={0.8}
+                />
 
-          {/* Ponto de fim */}
-          <Marker position={endPoint} icon={endIcon}>
-            <Tooltip sticky>
-              <div className="text-sm">
-                <p className="font-semibold text-red-700">Fim</p>
-                <p className="text-gray-600">{new Date(data[data.length-1].timestamp).toLocaleString('pt-BR')}</p>
-              </div>
-            </Tooltip>
-          </Marker>
+                <Marker position={[start.latitude, start.longitude]} icon={startIcon}>
+                  <Tooltip sticky>
+                    <div className="text-sm">
+                      <p className="font-semibold text-green-700">Inicio - {label}</p>
+                      <p className="text-gray-600">{formatDateTime(start.timestamp)}</p>
+                    </div>
+                  </Tooltip>
+                </Marker>
 
+                <Marker position={[end.latitude, end.longitude]} icon={endIcon}>
+                  <Tooltip sticky>
+                    <div className="text-sm">
+                      <p className="font-semibold text-red-700">Fim - {label}</p>
+                      <p className="text-gray-600">{formatDateTime(end.timestamp)}</p>
+                    </div>
+                  </Tooltip>
+                </Marker>
+              </Fragment>
+            )
+          })}
         </MapContainer>
       </div>
 
-      {/* Estatísticas da rota */}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gray-50 rounded-lg p-3 text-center">
-          <p className="text-sm text-gray-500">Distância</p>
+          <p className="text-sm text-gray-500">Distancia</p>
           <p className="text-lg font-bold">{totalDistance.toFixed(2)} km</p>
         </div>
         <div className="bg-gray-50 rounded-lg p-3 text-center">
-          <p className="text-sm text-gray-500">Duração</p>
+          <p className="text-sm text-gray-500">Tempo em movimento</p>
           <p className="text-lg font-bold">{formatDuration(totalTime)}</p>
         </div>
         <div className="bg-gray-50 rounded-lg p-3 text-center">
-          <p className="text-sm text-gray-500">Velocidade Média</p>
+          <p className="text-sm text-gray-500">Velocidade Media</p>
           <p className="text-lg font-bold">{avgSpeed.toFixed(1)} km/h</p>
         </div>
         <div className="bg-gray-50 rounded-lg p-3 text-center">
-          <p className="text-sm text-gray-500">Velocidade Máxima</p>
+          <p className="text-sm text-gray-500">Velocidade Maxima</p>
           <p className="text-lg font-bold">{maxSpeed.toFixed(1)} km/h</p>
         </div>
       </div>
