@@ -145,6 +145,7 @@ async def get_report_summary(
         )
 
     metrics = ReportService.calculate_report_metrics(positions_data)
+    stops_data = ReportService.identify_stops(positions_data)
     
     logger.info(
         f"Relatório com {metrics['journeys_count']} viagens: "
@@ -185,7 +186,7 @@ async def get_report_summary(
         total_time_minutes=metrics['total_time_minutes'],
         average_speed_kmh=metrics['average_speed_kmh'],
         max_speed_kmh=metrics['max_speed_kmh'],
-        total_stops=metrics['journeys_count'],
+        total_stops=len(stops_data),
         geofence_events_count=len(geofence_events),
         alerts_count=len(alerts),
     )
@@ -230,7 +231,8 @@ async def get_route(
         return []
 
     route_points = []
-    for pos in positions_data:
+    for enriched in ReportService.enrich_route_points(positions_data):
+        pos = enriched["position"]
         try:
             fix_time = pos.get("fixTime")
             if fix_time:
@@ -249,6 +251,12 @@ async def get_route(
                     longitude=pos.get("longitude"),
                     timestamp=ts,
                     speed=pos.get("speed"),
+                    journey_index=enriched["journey_index"],
+                    is_journey_start=enriched["is_journey_start"],
+                    is_journey_end=enriched["is_journey_end"],
+                    segment_distance_km=enriched["segment_distance_km"],
+                    segment_time_seconds=enriched["segment_time_seconds"],
+                    segment_speed_kmh=enriched["segment_speed_kmh"],
                 )
             )
         except Exception as e:
@@ -364,6 +372,7 @@ async def get_stops(
             start_time=stop["start_time"],
             end_time=stop["end_time"],
             duration_minutes=stop["duration_minutes"],
+            address=stop.get("address"),
         )
         for stop in stops_data
     ]
