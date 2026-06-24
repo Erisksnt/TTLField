@@ -47,6 +47,7 @@ interface StopPoint {
   start_time: string
   end_time: string
   duration_minutes: number
+  address?: string | null
 }
 
 interface GeofenceTabProps {
@@ -70,6 +71,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
   const formatTime = (isoString: string) => {
     const date = new Date(isoString)
     return date.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
       day: '2-digit',
       month: '2-digit',
       hour: '2-digit',
@@ -205,6 +207,9 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
                       <p className="text-xs text-gray-500">
                         {formatTime(stop.start_time)} - {formatTime(stop.end_time)}
                       </p>
+                      {stop.address && (
+                        <p className="text-xs text-gray-500 max-w-[180px] truncate">{stop.address}</p>
+                      )}
                     </div>
                     <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
                       {formatDuration(stop.duration_minutes)}
