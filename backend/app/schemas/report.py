@@ -21,6 +21,12 @@ class RoutePoint(BaseModel):
     longitude: float
     timestamp: datetime
     speed: Optional[float] = None
+    journey_index: Optional[int] = None
+    is_journey_start: bool = False
+    is_journey_end: bool = False
+    segment_distance_km: float = 0.0
+    segment_time_seconds: float = 0.0
+    segment_speed_kmh: float = 0.0
 
 
 class GeofenceEventReport(BaseModel):
@@ -39,6 +45,7 @@ class StopPoint(BaseModel):
     start_time: datetime
     end_time: datetime
     duration_minutes: float
+    address: Optional[str] = None
 
 
 class ReportAlert(BaseModel):
