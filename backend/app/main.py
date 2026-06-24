@@ -1,4 +1,3 @@
-## backend/app/main.py
 from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,9 +10,10 @@ import asyncio
 
 from app.config import get_settings
 from app.database import init_db, close_db, get_db
-from app.routes import auth, technicians, positions, geofences, websocket, reports
+from app.routes import auth, technicians, positions, geofences, websocket, reports, geofence_events
 from app.services.logout_service import LogoutService
 from app.utils.rate_limit import setup_rate_limit, limiter
+from app.services.geofence_service import start_periodic_check
 
 
 # Configurar logging
@@ -49,13 +49,20 @@ async def lifespan(app: FastAPI):
 
     sync_task = asyncio.create_task(sync_positions())
 
-    yield  # A aplicação roda aqui
+    # ============================================
+    # TAREFA PERIÓDICA DE VERIFICAÇÃO DE GEOFENCES (a cada 60 segundos)
+    # ============================================
+    geofence_check_task = asyncio.create_task(start_periodic_check(interval_seconds=60))
+
+    yield
 
     # Shutdown
     logger.info("Finalizando aplicação...")
     sync_task.cancel()
+    geofence_check_task.cancel()
     try:
         await sync_task
+        await geofence_check_task
     except asyncio.CancelledError:
         pass
     await close_db()
@@ -132,6 +139,7 @@ app.include_router(positions.router)
 app.include_router(geofences.router)
 app.include_router(websocket.router)
 app.include_router(reports.router)
+app.include_router(geofence_events.router)
 
 
 # ============================================

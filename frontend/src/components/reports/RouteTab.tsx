@@ -3,15 +3,6 @@ import { MapContainer, TileLayer, Polyline, Marker, Tooltip } from 'react-leafle
 import { Icon } from 'leaflet'
 import { useState, useEffect } from 'react'
 
-// Ícone para pontos da rota
-const routeIcon = new Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
 
 // Ícone para início (verde) e fim (vermelho)
 const startIcon = new Icon({
@@ -69,7 +60,7 @@ export default function RouteTab({ data }: RouteTabProps) {
   if (!data || data.length < 2) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">🗺️ Nenhuma rota encontrada para o período selecionado</p>
+        <p className="text-lg">Nenhuma rota encontrada para o período selecionado</p>
         <p className="text-sm mt-1">Selecione um técnico e um período com pelo menos duas posições registradas.</p>
       </div>
     )
@@ -159,10 +150,6 @@ export default function RouteTab({ data }: RouteTabProps) {
             </Tooltip>
           </Marker>
 
-          {/* Pontos intermediários */}
-          {data.slice(1, -1).map((p, idx) => (
-            <Marker key={idx} position={[p.latitude, p.longitude]} icon={routeIcon} />
-          ))}
         </MapContainer>
       </div>
 

@@ -19,7 +19,7 @@ export default function AlertsTab({ data }: AlertsTabProps) {
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">🔔 Nenhum alerta encontrado para o período selecionado</p>
+        <p className="text-lg">Nenhum alerta encontrado para o período selecionado</p>
       </div>
     )
   }

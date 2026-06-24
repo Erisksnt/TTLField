@@ -34,7 +34,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      TRACCAR_URL: ${TRACCAR_URL:-http://54.233.94.150:8082}
+      TRACCAR_URL: ${TRACCAR_URL:-http://54.186.123.45:8082}
     ports:
       - "8000:8000"
     depends_on:

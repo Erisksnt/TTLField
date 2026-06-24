@@ -5,6 +5,7 @@ from app.models.position import Position
 from app.models.geofence import Geofence
 from app.models.alert import Alert
 from app.models.event import Event
+from app.models.geofence_event import GeofenceEvent
 
 __all__ = [
     "User",
@@ -14,4 +15,5 @@ __all__ = [
     "Geofence",
     "Alert",
     "Event",
+    "GeofenceEvent",
 ]

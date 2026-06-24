@@ -10,8 +10,8 @@ from app.database import get_db
 from app.models.technician import Technician
 from app.models.position import Position
 from app.models.geofence import Geofence
+from app.models.geofence_event import GeofenceEvent
 from app.models.alert import Alert
-from app.models.event import Event
 from app.schemas.report import (
     ReportSummary,
     RoutePoint,
@@ -21,10 +21,75 @@ from app.schemas.report import (
 )
 from app.services.tracking_service import TrackingService
 from app.services.traccar_service import TraccarService
+from app.services.report_service import ReportService
 import logging
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/health/traccar")
+async def check_traccar_health():
+    """
+    Verifica conexão com o servidor Traccar.
+    Retorna status da conexão e lista de dispositivos disponíveis.
+    """
+    try:
+        traccar = TraccarService()
+        
+        # Tentar obter devices do Traccar
+        from datetime import timedelta
+        now = datetime.now()
+        start_dt = now - timedelta(hours=1)
+        end_dt = now
+        
+        logger.info("Testando conexão com Traccar...")
+        
+        # Fazer request direto à API do Traccar
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{traccar.base_url}/api/devices",
+                headers={"Accept": "application/json"}
+            )
+        
+        if response.status_code == 200:
+            devices = response.json()
+            logger.info(f"✅ Conexão com Traccar bem-sucedida! {len(devices)} devices encontrados")
+            
+            return {
+                "status": "✅ Conectado",
+                "traccar_url": traccar.base_url,
+                "devices_total": len(devices),
+                "devices": [
+                    {
+                        "id": d.get("id"),
+                        "name": d.get("name"),
+                        "uniqueId": d.get("uniqueId"),
+                        "category": d.get("category")
+                    }
+                    for d in devices
+                ],
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            logger.error(f"❌ Erro ao conectar com Traccar: Status {response.status_code}")
+            return {
+                "status": "❌ Erro de conexão",
+                "traccar_url": traccar.base_url,
+                "error": f"HTTP {response.status_code}",
+                "response": response.text[:500] if response.text else "Sem resposta",
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    except Exception as e:
+        logger.error(f"❌ Erro ao testar Traccar: {str(e)}")
+        return {
+            "status": "❌ Erro de conexão",
+            "error": str(e),
+            "message": "Verifique se o Traccar está rodando e acessível no IP configurado",
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 @router.get("/summary/{technician_id}", response_model=ReportSummary)
@@ -79,67 +144,27 @@ async def get_report_summary(
             alerts_count=0,
         )
 
-    # Ordenar por fixTime (timestamp)
-    positions_data.sort(key=lambda p: p.get("fixTime", ""))
+    metrics = ReportService.calculate_report_metrics(positions_data)
+    
+    logger.info(
+        f"Relatório com {metrics['journeys_count']} viagens: "
+        f"distância={metrics['total_distance_km']}km, "
+        f"tempo={metrics['total_time_minutes']}min, "
+        f"velocidade_média={metrics['average_speed_kmh']}km/h"
+    )
 
-    total_distance = 0.0
-    total_time_seconds = 0.0
-    max_speed = 0.0
-    stops = 0
+    # Buscar eventos e alertas
+    try:
+        device_id_int = int(technician.device_id)
+    except (ValueError, TypeError):
+        logger.warning(f"Device ID inválido para técnico {technician_id}: {technician.device_id}")
+        device_id_int = None
 
-    logger.info(f"📊 Calculando métricas para {len(positions_data)} pontos")
-
-    for i in range(1, len(positions_data)):
-        prev = positions_data[i-1]
-        curr = positions_data[i]
-
-        # Extrair timestamps
-        prev_time_str = prev.get("fixTime") or prev.get("serverTime")
-        curr_time_str = curr.get("fixTime") or curr.get("serverTime")
-        if not prev_time_str or not curr_time_str:
-            continue
-
-        prev_dt = datetime.fromisoformat(prev_time_str.replace('Z', '+00:00')).replace(tzinfo=None)
-        curr_dt = datetime.fromisoformat(curr_time_str.replace('Z', '+00:00')).replace(tzinfo=None)
-
-        # Coordenadas
-        lat1 = prev.get("latitude")
-        lon1 = prev.get("longitude")
-        lat2 = curr.get("latitude")
-        lon2 = curr.get("longitude")
-
-        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
-            continue
-
-        # 🔥 Cálculo de distância usando função haversine
-        dist_km = TrackingService.haversine(lon1, lat1, lon2, lat2) / 1000.0
-        total_distance += dist_km
-
-        # Tempo
-        time_diff = (curr_dt - prev_dt).total_seconds()
-        total_time_seconds += time_diff
-
-        # Velocidade (se disponível)
-        if curr.get("speed") is not None:
-            speed_kmh = curr["speed"] * 3.6
-            if speed_kmh > max_speed:
-                max_speed = speed_kmh
-
-        # Parada (mais de 2 minutos e menos de 10m)
-        if time_diff > 120 and dist_km < 0.01:
-            stops += 1
-
-    avg_speed = (total_distance / (total_time_seconds / 3600)) if total_time_seconds > 0 else 0.0
-
-    logger.info(f"📊 Resultados: distância={total_distance:.2f}km, tempo={total_time_seconds:.0f}s, paradas={stops}")
-
-    # Buscar eventos e alertas (do banco local – opcional)
-    stmt_events = select(Event).where(
+    stmt_events = select(GeofenceEvent).where(
         and_(
-            Event.technician_id == technician_id,
-            Event.event_timestamp >= start_dt,
-            Event.event_timestamp <= end_dt,
-            Event.event_type.in_(["geofence_enter", "geofence_exit"])
+            GeofenceEvent.device_id == device_id_int,
+            GeofenceEvent.timestamp >= start_dt,
+            GeofenceEvent.timestamp <= end_dt,
         )
     )
     result_events = await db.execute(stmt_events)
@@ -156,11 +181,11 @@ async def get_report_summary(
     alerts = result_alerts.scalars().all()
 
     return ReportSummary(
-        total_distance_km=round(total_distance, 2),
-        total_time_minutes=round(total_time_seconds / 60, 1),
-        average_speed_kmh=round(avg_speed, 1),
-        max_speed_kmh=round(max_speed, 1),
-        total_stops=stops,
+        total_distance_km=metrics['total_distance_km'],
+        total_time_minutes=metrics['total_time_minutes'],
+        average_speed_kmh=metrics['average_speed_kmh'],
+        max_speed_kmh=metrics['max_speed_kmh'],
+        total_stops=metrics['journeys_count'],
         geofence_events_count=len(geofence_events),
         alerts_count=len(alerts),
     )
@@ -207,7 +232,6 @@ async def get_route(
     route_points = []
     for pos in positions_data:
         try:
-            # Converte timestamp
             fix_time = pos.get("fixTime")
             if fix_time:
                 if isinstance(fix_time, str):
@@ -243,6 +267,7 @@ async def get_geofence_events(
 ):
     """
     Obtém os eventos de geofence de um técnico em um período.
+    Consulta a tabela geofence_events (inserida pelo serviço de geofence).
     """
     try:
         start_dt = datetime.fromisoformat(start_date)
@@ -250,25 +275,38 @@ async def get_geofence_events(
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido")
 
-    stmt = select(Event, Geofence).join(
-        Geofence, Event.geofence_id == Geofence.id
+    # Buscar técnico para obter device_id
+    stmt = select(Technician).where(Technician.id == technician_id)
+    result = await db.execute(stmt)
+    technician = result.scalar_one_or_none()
+    if not technician or not technician.device_id:
+        logger.warning(f"Técnico {technician_id} sem device_id")
+        return []
+
+    try:
+        device_id_int = int(technician.device_id)
+    except (ValueError, TypeError):
+        logger.warning(f"Device ID inválido para técnico {technician_id}: {technician.device_id}")
+        return []
+
+    stmt = select(GeofenceEvent, Geofence).join(
+        Geofence, GeofenceEvent.geofence_id == Geofence.id
     ).where(
         and_(
-            Event.technician_id == technician_id,
-            Event.event_timestamp >= start_dt,
-            Event.event_timestamp <= end_dt,
-            Event.event_type.in_(["geofence_enter", "geofence_exit"])
+            GeofenceEvent.device_id == device_id_int,
+            GeofenceEvent.timestamp >= start_dt,
+            GeofenceEvent.timestamp <= end_dt,
         )
-    ).order_by(Event.event_timestamp)
-    
+    ).order_by(GeofenceEvent.timestamp)
+
     result = await db.execute(stmt)
     rows = result.all()
-    
+
     return [
         GeofenceEventReport(
             geofence_name=geofence.name,
-            event_type=event.event_type.replace("geofence_", ""),
-            timestamp=event.event_timestamp,
+            event_type=event.event_type,
+            timestamp=event.timestamp,
             latitude=event.latitude,
             longitude=event.longitude,
         )
@@ -285,63 +323,52 @@ async def get_stops(
 ):
     """
     Obtém os pontos de parada de um técnico em um período.
+    Usa a nova lógica melhorada que filtra ruído GPS e períodos de inatividade longa.
     """
     try:
         start_dt = datetime.fromisoformat(start_date)
         end_dt = datetime.fromisoformat(end_date)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de data inválido")
+        raise HTTPException(status_code=400, detail="Formato de data inválido. Use ISO 8601 (YYYY-MM-DDTHH:MM:SS)")
 
-    stmt = select(Position).where(
-        and_(
-            Position.technician_id == technician_id,
-            Position.timestamp >= start_dt,
-            Position.timestamp <= end_dt,
-        )
-    ).order_by(Position.timestamp)
-    
+    # Buscar técnico para obter device_id
+    stmt = select(Technician).where(Technician.id == technician_id)
     result = await db.execute(stmt)
-    positions = result.scalars().all()
+    technician = result.scalar_one_or_none()
+    if not technician or not technician.device_id:
+        logger.warning(f"Técnico {technician_id} sem device_id")
+        return []
+
+    # Buscar posições do Traccar
+    traccar = TraccarService()
+    try:
+        positions_data = await traccar.get_device_positions(
+            int(technician.device_id),
+            start_dt,
+            end_dt
+        )
+    except Exception as e:
+        logger.error(f"Erro ao buscar posições do Traccar: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar dados do Traccar")
+
+    if not positions_data:
+        return []
+
+    # Serviço para identificar paradas
+    stops_data = ReportService.identify_stops(positions_data, min_stop_duration_minutes=2)
     
-    stops = []
-    i = 0
-    while i < len(positions):
-        if i + 1 < len(positions):
-            dist = TrackingService.haversine(
-                positions[i].longitude, positions[i].latitude,
-                positions[i+1].longitude, positions[i+1].latitude
-            )
-            time_diff = (positions[i+1].timestamp - positions[i].timestamp).total_seconds()
-            
-            if time_diff > 120 and dist < 10:
-                start_stop = positions[i]
-                end_stop = positions[i]
-                j = i + 1
-                while j < len(positions):
-                    d = TrackingService.haversine(
-                        start_stop.longitude, start_stop.latitude,
-                        positions[j].longitude, positions[j].latitude
-                    )
-                    if d > 10 or (positions[j].timestamp - start_stop.timestamp).total_seconds() > 600:
-                        break
-                    end_stop = positions[j]
-                    j += 1
-                
-                duration = (end_stop.timestamp - start_stop.timestamp).total_seconds() / 60
-                if duration >= 2:
-                    stops.append(StopPoint(
-                        latitude=start_stop.latitude,
-                        longitude=start_stop.longitude,
-                        start_time=start_stop.timestamp,
-                        end_time=end_stop.timestamp,
-                        duration_minutes=round(duration, 1),
-                    ))
-                i = j
-            else:
-                i += 1
-        else:
-            break
+    stops = [
+        StopPoint(
+            latitude=stop["latitude"],
+            longitude=stop["longitude"],
+            start_time=stop["start_time"],
+            end_time=stop["end_time"],
+            duration_minutes=stop["duration_minutes"],
+        )
+        for stop in stops_data
+    ]
     
+    logger.info(f"Identificadas {len(stops)} paradas para técnico {technician_id}")
     return stops
 
 

@@ -55,11 +55,13 @@ interface GeofenceTabProps {
 }
 
 export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
-  // Se não houver dados, exibe mensagem
-  if (!data || data.length === 0) {
+  const hasGeofenceEvents = Boolean(data && data.length > 0)
+  const hasStops = Boolean(stops && stops.length > 0)
+
+  if (!hasGeofenceEvents && !hasStops) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">📍 Nenhum evento de geofence encontrado para o período selecionado</p>
+        <p className="text-lg">Nenhum evento de geofence ou parada encontrado para o período selecionado</p>
       </div>
     )
   }
@@ -85,23 +87,27 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
   }
 
   // Agrupar eventos por geofence para exibição na lista
-  const eventsByGeofence = data.reduce((acc, event) => {
+  const eventsByGeofence = (data ?? []).reduce((acc, event) => {
     const key = event.geofence_name
     if (!acc[key]) acc[key] = []
     acc[key].push(event)
     return acc
   }, {} as Record<string, GeofenceEvent[]>)
 
-  // Calcular centro do mapa com base nos eventos
-  const centerLat = data.reduce((sum, e) => sum + e.latitude, 0) / data.length
-  const centerLng = data.reduce((sum, e) => sum + e.longitude, 0) / data.length
+  // Calcular centro do mapa com base nos eventos ou paradas
+  const centerLat = hasGeofenceEvents
+    ? data!.reduce((sum, e) => sum + e.latitude, 0) / data!.length
+    : stops!.reduce((sum, stop) => sum + stop.latitude, 0) / stops!.length
+  const centerLng = hasGeofenceEvents
+    ? data!.reduce((sum, e) => sum + e.longitude, 0) / data!.length
+    : stops!.reduce((sum, stop) => sum + stop.longitude, 0) / stops!.length
 
   return (
     <div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
         <p className="text-sm text-blue-700">
-          <strong>📍 Eventos de Geofence</strong> – {data.length} evento(s) registrado(s) no período.
-          {stops && stops.length > 0 && ` • ${stops.length} parada(s) identificada(s).`}
+          <strong>Eventos de Geofence</strong> – {hasGeofenceEvents ? `${data!.length} evento(s) registrado(s) no período.` : 'Nenhum evento de geofence encontrado no período.'}
+          {hasStops && ` • ${stops!.length} parada(s) identificada(s).`}
         </p>
       </div>
 
@@ -119,7 +125,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
             />
 
             {/* Eventos de Geofence (entrada/saída) */}
-            {data.map((event, index) => {
+            {(data ?? []).map((event, index) => {
               const icon = event.event_type === 'enter' ? enterIcon : exitIcon
               const label = event.event_type === 'enter' ? 'Entrada' : 'Saída'
               return (

@@ -29,7 +29,7 @@ export default function OverviewTab({ data }: OverviewTabProps) {
   if (!data) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">📊 Nenhum dado disponível para o período selecionado</p>
+        <p className="text-lg">Nenhum dado disponível para o período selecionado</p>
       </div>
     )
   }
