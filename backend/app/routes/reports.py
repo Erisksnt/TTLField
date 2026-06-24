@@ -1,10 +1,10 @@
-## backend/app/routes/reports.py
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import logging
 
 from app.database import get_db
 from app.models.technician import Technician
@@ -22,7 +22,48 @@ from app.schemas.report import (
 from app.services.tracking_service import TrackingService
 from app.services.traccar_service import TraccarService
 from app.services.report_service import ReportService
-import logging
+
+# --- Suporte a fuso horário ---
+try:
+    from zoneinfo import ZoneInfo
+    TZ_BRASILIA = ZoneInfo("America/Sao_Paulo")
+except ImportError:
+    import pytz
+    TZ_BRASILIA = pytz.timezone("America/Sao_Paulo")
+
+def to_brasilia(dt):
+    """
+    Converte um datetime (com ou sem fuso) para o horário de Brasília.
+    Retorna um datetime naive (sem fuso) para compatibilidade com os schemas.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt_br = dt.astimezone(TZ_BRASILIA)
+    return dt_br.replace(tzinfo=None)
+
+def parse_date_to_utc(date_str: str) -> datetime:
+    """
+    Converte uma string ISO (ex: '2026-06-24T00:00:00') para um datetime em UTC,
+    assumindo que a string representa um horário de Brasília (UTC-3).
+    Retorna um datetime naive (sem fuso) no UTC.
+    """
+    dt_naive = datetime.fromisoformat(date_str)
+    # Anexar o fuso de Brasília ao datetime
+    if dt_naive.tzinfo is None:
+        # Compatível com ZoneInfo e pytz
+        if hasattr(TZ_BRASILIA, 'localize'):
+            # pytz
+            dt_br = TZ_BRASILIA.localize(dt_naive)
+        else:
+            # ZoneInfo
+            dt_br = dt_naive.replace(tzinfo=TZ_BRASILIA)
+    else:
+        dt_br = dt_naive.astimezone(TZ_BRASILIA)
+    # Converter para UTC
+    dt_utc = dt_br.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt_utc
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger(__name__)
@@ -30,47 +71,26 @@ logger = logging.getLogger(__name__)
 
 @router.get("/health/traccar")
 async def check_traccar_health():
-    """
-    Verifica conexão com o servidor Traccar.
-    Retorna status da conexão e lista de dispositivos disponíveis.
-    """
+    """Verifica conexão com o servidor Traccar."""
     try:
         traccar = TraccarService()
-        
-        # Tentar obter devices do Traccar
-        from datetime import timedelta
-        now = datetime.now()
-        start_dt = now - timedelta(hours=1)
-        end_dt = now
-        
+        now = datetime.now(TZ_BRASILIA).replace(tzinfo=None)
         logger.info("Testando conexão com Traccar...")
-        
-        # Fazer request direto à API do Traccar
         import httpx
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
                 f"{traccar.base_url}/api/devices",
                 headers={"Accept": "application/json"}
             )
-        
         if response.status_code == 200:
             devices = response.json()
             logger.info(f"✅ Conexão com Traccar bem-sucedida! {len(devices)} devices encontrados")
-            
             return {
                 "status": "✅ Conectado",
                 "traccar_url": traccar.base_url,
                 "devices_total": len(devices),
-                "devices": [
-                    {
-                        "id": d.get("id"),
-                        "name": d.get("name"),
-                        "uniqueId": d.get("uniqueId"),
-                        "category": d.get("category")
-                    }
-                    for d in devices
-                ],
-                "timestamp": datetime.now().isoformat()
+                "devices": [{"id": d.get("id"), "name": d.get("name"), "uniqueId": d.get("uniqueId"), "category": d.get("category")} for d in devices],
+                "timestamp": now.isoformat()
             }
         else:
             logger.error(f"❌ Erro ao conectar com Traccar: Status {response.status_code}")
@@ -79,16 +99,15 @@ async def check_traccar_health():
                 "traccar_url": traccar.base_url,
                 "error": f"HTTP {response.status_code}",
                 "response": response.text[:500] if response.text else "Sem resposta",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": now.isoformat()
             }
-    
     except Exception as e:
         logger.error(f"❌ Erro ao testar Traccar: {str(e)}")
         return {
             "status": "❌ Erro de conexão",
             "error": str(e),
             "message": "Verifique se o Traccar está rodando e acessível no IP configurado",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(TZ_BRASILIA).replace(tzinfo=None).isoformat()
         }
 
 
@@ -99,16 +118,13 @@ async def get_report_summary(
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Obtém o resumo das estatísticas de um técnico em um período, buscando do Traccar.
-    """
+    """Obtém o resumo das estatísticas de um técnico em um período."""
     try:
-        start_dt = datetime.fromisoformat(start_date)
-        end_dt = datetime.fromisoformat(end_date)
+        start_dt = parse_date_to_utc(start_date)
+        end_dt = parse_date_to_utc(end_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido. Use ISO 8601 (YYYY-MM-DDTHH:MM:SS)")
 
-    # Busca técnico para obter device_id
     stmt = select(Technician).where(Technician.id == technician_id)
     result = await db.execute(stmt)
     technician = result.scalar_one_or_none()
@@ -124,7 +140,6 @@ async def get_report_summary(
             alerts_count=0,
         )
 
-    # Busca posições do Traccar
     traccar = TraccarService()
     positions_data = await traccar.get_device_positions(
         int(technician.device_id),
@@ -146,7 +161,6 @@ async def get_report_summary(
 
     metrics = ReportService.calculate_report_metrics(positions_data)
     stops_data = ReportService.identify_stops(positions_data)
-    
     logger.info(
         f"Relatório com {metrics['journeys_count']} viagens: "
         f"distância={metrics['total_distance_km']}km, "
@@ -154,7 +168,6 @@ async def get_report_summary(
         f"velocidade_média={metrics['average_speed_kmh']}km/h"
     )
 
-    # Buscar eventos e alertas
     try:
         device_id_int = int(technician.device_id)
     except (ValueError, TypeError):
@@ -199,23 +212,19 @@ async def get_route(
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Obtém os pontos da rota de um técnico em um período, consultando o Traccar.
-    """
+    """Obtém os pontos da rota de um técnico em um período."""
     try:
-        start_dt = datetime.fromisoformat(start_date)
-        end_dt = datetime.fromisoformat(end_date)
+        start_dt = parse_date_to_utc(start_date)
+        end_dt = parse_date_to_utc(end_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido")
 
-    # Buscar técnico para obter device_id
     stmt = select(Technician).where(Technician.id == technician_id)
     result = await db.execute(stmt)
     technician = result.scalar_one_or_none()
     if not technician or not technician.device_id:
         raise HTTPException(status_code=404, detail="Técnico ou device_id não encontrado")
 
-    # Buscar posições do Traccar
     traccar = TraccarService()
     try:
         positions_data = await traccar.get_device_positions(
@@ -237,9 +246,10 @@ async def get_route(
             fix_time = pos.get("fixTime")
             if fix_time:
                 if isinstance(fix_time, str):
-                    ts = datetime.fromisoformat(fix_time.replace('Z', '+00:00')).replace(tzinfo=None)
+                    dt_utc = datetime.fromisoformat(fix_time.replace('Z', '+00:00'))
+                    ts = to_brasilia(dt_utc)
                 elif isinstance(fix_time, datetime):
-                    ts = fix_time.replace(tzinfo=None)
+                    ts = to_brasilia(fix_time)
                 else:
                     continue
             else:
@@ -273,17 +283,13 @@ async def get_geofence_events(
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Obtém os eventos de geofence de um técnico em um período.
-    Consulta a tabela geofence_events (inserida pelo serviço de geofence).
-    """
+    """Obtém os eventos de geofence de um técnico em um período."""
     try:
-        start_dt = datetime.fromisoformat(start_date)
-        end_dt = datetime.fromisoformat(end_date)
+        start_dt = parse_date_to_utc(start_date)
+        end_dt = parse_date_to_utc(end_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido")
 
-    # Buscar técnico para obter device_id
     stmt = select(Technician).where(Technician.id == technician_id)
     result = await db.execute(stmt)
     technician = result.scalar_one_or_none()
@@ -314,7 +320,7 @@ async def get_geofence_events(
         GeofenceEventReport(
             geofence_name=geofence.name,
             event_type=event.event_type,
-            timestamp=event.timestamp,
+            timestamp=to_brasilia(event.timestamp),
             latitude=event.latitude,
             longitude=event.longitude,
         )
@@ -329,17 +335,13 @@ async def get_stops(
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Obtém os pontos de parada de um técnico em um período.
-    Usa a nova lógica melhorada que filtra ruído GPS e períodos de inatividade longa.
-    """
+    """Obtém os pontos de parada de um técnico em um período."""
     try:
-        start_dt = datetime.fromisoformat(start_date)
-        end_dt = datetime.fromisoformat(end_date)
+        start_dt = parse_date_to_utc(start_date)
+        end_dt = parse_date_to_utc(end_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido. Use ISO 8601 (YYYY-MM-DDTHH:MM:SS)")
 
-    # Buscar técnico para obter device_id
     stmt = select(Technician).where(Technician.id == technician_id)
     result = await db.execute(stmt)
     technician = result.scalar_one_or_none()
@@ -347,7 +349,6 @@ async def get_stops(
         logger.warning(f"Técnico {technician_id} sem device_id")
         return []
 
-    # Buscar posições do Traccar
     traccar = TraccarService()
     try:
         positions_data = await traccar.get_device_positions(
@@ -362,21 +363,18 @@ async def get_stops(
     if not positions_data:
         return []
 
-    # Serviço para identificar paradas
     stops_data = ReportService.identify_stops(positions_data, min_stop_duration_minutes=2)
-    
     stops = [
         StopPoint(
             latitude=stop["latitude"],
             longitude=stop["longitude"],
-            start_time=stop["start_time"],
-            end_time=stop["end_time"],
+            start_time=to_brasilia(stop["start_time"]),
+            end_time=to_brasilia(stop["end_time"]),
             duration_minutes=stop["duration_minutes"],
             address=stop.get("address"),
         )
         for stop in stops_data
     ]
-    
     logger.info(f"Identificadas {len(stops)} paradas para técnico {technician_id}")
     return stops
 
@@ -388,12 +386,10 @@ async def get_alerts_report(
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Obtém os alertas de um técnico em um período.
-    """
+    """Obtém os alertas de um técnico em um período."""
     try:
-        start_dt = datetime.fromisoformat(start_date)
-        end_dt = datetime.fromisoformat(end_date)
+        start_dt = parse_date_to_utc(start_date)
+        end_dt = parse_date_to_utc(end_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido")
 
@@ -414,7 +410,7 @@ async def get_alerts_report(
             alert_type=alert.alert_type,
             description=alert.description,
             severity=alert.severity,
-            triggered_at=alert.triggered_at,
+            triggered_at=to_brasilia(alert.triggered_at),
             is_acknowledged=alert.is_acknowledged,
         )
         for alert in alerts
