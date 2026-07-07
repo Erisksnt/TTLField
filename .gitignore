@@ -46,3 +46,5 @@ Thumbs.db
 /traccar
 /traccar/conf/traccar.xml
 /traccar/conf/database_producao.mv.db
+
+docker-compose2.yml
