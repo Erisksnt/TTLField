@@ -4,9 +4,9 @@ services:
     image: postgres:15-alpine
     container_name: isp-tracker-db
     environment:
-      POSTGRES_USER: ${DB_USER:-tracker_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password}
-      POSTGRES_DB: ${DB_NAME:-isp_tracker}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-isp_tracker} 
     ports:
       - "5432:5432"
     volumes:
@@ -14,7 +14,7 @@ services:
     networks:
       - tracker_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tracker_user} -d ${DB_NAME:-isp_tracker}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME:-isp_tracker}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,13 +28,12 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${DB_USER:-tracker_user}:${DB_PASSWORD:-secure_password}@postgres:5432/${DB_NAME:-isp_tracker}
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-isp_tracker}
+      SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      # Usa variável de ambiente, com fallback para o nome do serviço Traccar
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
     ports:
       - "8000:8000"
@@ -45,7 +44,7 @@ services:
       - ./backend:/app
     networks:
       - tracker_network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   # Frontend (React)
   frontend:
@@ -86,8 +85,8 @@ services:
     environment:
       - database.driver=org.postgresql.Driver
       - database.url=jdbc:postgresql://postgres:5432/${DB_NAME:-isp_tracker}
-      - database.user=${DB_USER:-tracker_user}
-      - database.password=${DB_PASSWORD:-secure_password}
+      - database.user=${DB_USER}
+      - database.password=${DB_PASSWORD}
 
 volumes:
   postgres_data:
