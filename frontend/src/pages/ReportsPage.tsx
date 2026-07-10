@@ -11,6 +11,7 @@ import { Technician } from '@/types'
 import toast from 'react-hot-toast'
 
 type TabType = 'overview' | 'route' | 'geofence' | 'alerts'
+type DatePeriod = 'today' | 'yesterday' | 'this_week' | 'previous_week' | 'this_month' | 'previous_month' | 'custom'
 
 const tabs: { id: TabType; label: string; icon: string }[] = [
   { id: 'overview', label: 'Visão Geral', icon: '📊' },
@@ -19,18 +20,91 @@ const tabs: { id: TabType; label: string; icon: string }[] = [
   { id: 'alerts', label: 'Alertas', icon: '🔔' },
 ]
 
+const periodOptions: { value: DatePeriod; label: string }[] = [
+  { value: 'today', label: 'Hoje' },
+  { value: 'yesterday', label: 'Ontem' },
+  { value: 'this_week', label: 'Esta Semana' },
+  { value: 'previous_week', label: 'Semana Anterior' },
+  { value: 'this_month', label: 'Este Mês' },
+  { value: 'previous_month', label: 'Mês Anterior' },
+  { value: 'custom', label: 'Personalizado' },
+]
+
+const formatDateInput = (date: Date) => {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getDateRangeForPeriod = (period: DatePeriod) => {
+  const today = new Date()
+  const start = new Date(today)
+  const end = new Date(today)
+
+  if (period === 'custom') {
+    return { startDate: formatDateInput(today), endDate: formatDateInput(today) }
+  }
+
+  if (period === 'yesterday') {
+    start.setDate(today.getDate() - 1)
+    end.setDate(today.getDate() - 1)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+    return { startDate: formatDateInput(start), endDate: formatDateInput(end) }
+  }
+
+  if (period === 'this_week') {
+    const day = today.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    start.setDate(today.getDate() + diff)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+    return { startDate: formatDateInput(start), endDate: formatDateInput(end) }
+  }
+
+  if (period === 'previous_week') {
+    const day = today.getDay()
+    const diff = day === 0 ? -13 : 1 - day - 7
+    start.setDate(today.getDate() + diff)
+    end.setDate(start.getDate() + 6)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+    return { startDate: formatDateInput(start), endDate: formatDateInput(end) }
+  }
+
+  if (period === 'this_month') {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+    return { startDate: formatDateInput(start), endDate: formatDateInput(end) }
+  }
+
+  if (period === 'previous_month') {
+    const firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    start.setTime(firstDayOfCurrentMonth.getTime())
+    start.setMonth(start.getMonth() - 1)
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+
+    end.setTime(firstDayOfCurrentMonth.getTime())
+    end.setDate(0)
+    end.setHours(23, 59, 59, 999)
+    return { startDate: formatDateInput(start), endDate: formatDateInput(end) }
+  }
+
+  start.setHours(0, 0, 0, 0)
+  end.setHours(23, 59, 59, 999)
+  return { startDate: formatDateInput(start), endDate: formatDateInput(end) }
+}
+
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [selectedTechnician, setSelectedTechnician] = useState<string>('')
-  const [startDate, setStartDate] = useState<string>(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 7)
-    return d.toISOString().split('T')[0]
-  })
-  const [endDate, setEndDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0]
-  })
+  const [selectedPeriod, setSelectedPeriod] = useState<DatePeriod>('today')
+  const [startDate, setStartDate] = useState<string>(() => getDateRangeForPeriod('today').startDate)
+  const [endDate, setEndDate] = useState<string>(() => getDateRangeForPeriod('today').endDate)
   const [isLoading, setIsLoading] = useState(false)
   const [reportData, setReportData] = useState<any>(null)
   const location = useLocation()
@@ -59,6 +133,18 @@ export default function ReportsPage() {
     }
     fetchTechnicians()
   }, [location.search])
+
+  const handlePeriodChange = (period: DatePeriod) => {
+    setSelectedPeriod(period)
+
+    if (period === 'custom') {
+      return
+    }
+
+    const { startDate: nextStartDate, endDate: nextEndDate } = getDateRangeForPeriod(period)
+    setStartDate(nextStartDate)
+    setEndDate(nextEndDate)
+  }
 
   // Buscar dados do relatório
   const fetchReportData = async () => {
@@ -135,24 +221,42 @@ export default function ReportsPage() {
               ))}
             </select>
           </div>
-          <div className="flex-1 min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
-            <input 
-              type="date" 
+          <div className="flex-1 min-w-[220px]">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Período</label>
+            <select
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+              value={selectedPeriod}
+              onChange={(e) => handlePeriodChange(e.target.value as DatePeriod)}
+            >
+              {periodOptions.map((period) => (
+                <option key={period.value} value={period.value}>
+                  {period.label}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="flex-1 min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
-            <input 
-              type="date" 
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
+          {selectedPeriod === 'custom' && (
+            <>
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </>
+          )}
           <div className="flex items-end">
             <button 
               onClick={fetchReportData}
