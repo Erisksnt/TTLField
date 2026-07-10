@@ -1,5 +1,6 @@
 // frontend/src/pages/ReportsPage.tsx
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import Layout from '@/components/Layout'
 import OverviewTab from '@/components/reports/OverviewTab'
 import RouteTab from '@/components/reports/RouteTab'
@@ -32,6 +33,7 @@ export default function ReportsPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [reportData, setReportData] = useState<any>(null)
+  const location = useLocation()
 
   // Carregar lista de técnicos
   useEffect(() => {
@@ -39,8 +41,16 @@ export default function ReportsPage() {
       try {
         const data = await api.getTechnicians(undefined, 0, 1000)
         setTechnicians(data)
-        if (data.length > 0) {
-          setSelectedTechnician(data[0].id)
+        try {
+          const params = new URLSearchParams(location.search)
+          const paramTech = params.get('technicianId')
+          if (paramTech && data.find((t) => t.id === paramTech)) {
+            setSelectedTechnician(paramTech)
+          } else if (data.length > 0) {
+            setSelectedTechnician(data[0].id)
+          }
+        } catch (e) {
+          if (data.length > 0) setSelectedTechnician(data[0].id)
         }
       } catch (error) {
         toast.error('Erro ao carregar técnicos')
@@ -48,7 +58,7 @@ export default function ReportsPage() {
       }
     }
     fetchTechnicians()
-  }, [])
+  }, [location.search])
 
   // Buscar dados do relatório
   const fetchReportData = async () => {
