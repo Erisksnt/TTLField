@@ -439,7 +439,7 @@ export default function DashboardPage() {
                 key={mapKey}
                 center={centerPosition}
                 zoom={12}
-                style={{ height: '100%', width: '100%' }}
+                style={{ height: '100%', width: '100%', zIndex: 1 }}
               >
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

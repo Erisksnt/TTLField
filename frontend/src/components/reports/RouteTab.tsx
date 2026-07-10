@@ -232,7 +232,7 @@ export default function RouteTab({ data }: RouteTabProps) {
         <MapContainer
           center={[center.lat, center.lng]}
           zoom={14}
-          style={{ height: '100%', width: '100%' }}
+          style={{ height: '100%', width: '100%', zIndex: 1 }}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

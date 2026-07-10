@@ -119,7 +119,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
           <MapContainer
             center={[centerLat || -23.515, centerLng || -46.865]}
             zoom={14}
-            style={{ height: '100%', width: '100%' }}
+            style={{ height: '100%', width: '100%', zIndex: 1 }}
           >
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
