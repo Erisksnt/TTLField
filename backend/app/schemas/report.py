@@ -1,7 +1,7 @@
 ## backend/app/schemas/report.py
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 
 class ReportSummary(BaseModel):
@@ -56,3 +56,8 @@ class ReportAlert(BaseModel):
     severity: str
     triggered_at: datetime
     is_acknowledged: bool
+
+
+class RouteMatchedResponse(BaseModel):
+    route: List[RoutePoint]
+    matched_routes: Optional[Dict[int, List[List[float]]]] = None

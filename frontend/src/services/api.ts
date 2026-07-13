@@ -215,7 +215,8 @@ class ApiService {
     startDate: string,
     endDate: string
   ): Promise<any> {
-    const response = await this.api.get(`/reports/route/${technicianId}`, {
+    // Use backend matched route endpoint which may include provider route geometry
+    const response = await this.api.get(`/reports/route-matched/${technicianId}`, {
       params: { start_date: startDate, end_date: endDate }
     })
     return response.data

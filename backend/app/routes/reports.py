@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 import logging
 
 from app.database import get_db
@@ -18,10 +18,12 @@ from app.schemas.report import (
     GeofenceEventReport,
     StopPoint,
     ReportAlert,
+    RouteMatchedResponse,
 )
 from app.services.tracking_service import TrackingService
 from app.services.traccar_service import TraccarService
 from app.services.report_service import ReportService
+from app.services.route_matching_service import RouteMatchingService
 
 # --- Suporte a fuso horário ---
 try:
@@ -274,6 +276,107 @@ async def get_route(
             continue
 
     return route_points
+
+
+@router.get("/route-matched/{technician_id}", response_model=RouteMatchedResponse)
+async def get_route_matched(
+    technician_id: str,
+    start_date: str = Query(..., description="Data inicial (ISO 8601)"),
+    end_date: str = Query(..., description="Data final (ISO 8601)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Obtém os pontos da rota e, opcionalmente, a geometria casada pelo provedor de rota."""
+    try:
+        start_dt = parse_date_to_utc(start_date)
+        end_dt = parse_date_to_utc(end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de data inválido")
+
+    stmt = select(Technician).where(Technician.id == technician_id)
+    result = await db.execute(stmt)
+    technician = result.scalar_one_or_none()
+    if not technician or not technician.device_id:
+        raise HTTPException(status_code=404, detail="Técnico ou device_id não encontrado")
+
+    traccar = TraccarService()
+    try:
+        positions_data = await traccar.get_device_positions(
+            int(technician.device_id),
+            start_dt,
+            end_dt
+        )
+    except Exception as e:
+        logger.error(f"Erro ao buscar posições do Traccar: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar dados do Traccar")
+
+    if not positions_data:
+        return RouteMatchedResponse(route=[])
+
+    route_matching = RouteMatchingService()
+    route_points = []
+    journeys: Dict[int, List[Dict]] = {}
+
+    for enriched in ReportService.enrich_route_points(positions_data):
+        pos = enriched["position"]
+        try:
+            fix_time = pos.get("fixTime")
+            if fix_time:
+                if isinstance(fix_time, str):
+                    dt_utc = datetime.fromisoformat(fix_time.replace('Z', '+00:00'))
+                    ts = to_brasilia(dt_utc)
+                elif isinstance(fix_time, datetime):
+                    ts = to_brasilia(fix_time)
+                else:
+                    continue
+            else:
+                continue
+
+            route_points.append(
+                RoutePoint(
+                    latitude=pos.get("latitude"),
+                    longitude=pos.get("longitude"),
+                    timestamp=ts,
+                    speed=pos.get("speed"),
+                    journey_index=enriched["journey_index"],
+                    is_journey_start=enriched["is_journey_start"],
+                    is_journey_end=enriched["is_journey_end"],
+                    segment_distance_km=enriched["segment_distance_km"],
+                    segment_time_seconds=enriched["segment_time_seconds"],
+                    segment_speed_kmh=enriched["segment_speed_kmh"],
+                )
+            )
+
+            ji = enriched.get('journey_index') or 0
+            journeys.setdefault(ji, []).append(pos)
+        except Exception as e:
+            logger.warning(f"Erro ao processar ponto: {e}")
+            continue
+
+    matched_routes: Dict[int, List[List[float]]] = {}
+    for ji, pts in journeys.items():
+        points = [
+            {"latitude": p["latitude"], "longitude": p["longitude"]}
+            for p in pts
+            if p.get("latitude") is not None and p.get("longitude") is not None
+        ]
+
+        if len(points) < 2:
+            continue
+
+        try:
+            matched = await route_matching.match_route(points)
+            if matched:
+                matched_routes[ji] = matched
+        except Exception as e:
+            logger.warning(
+                "Route matching failed for technician %s journey %s: %s",
+                technician_id,
+                ji,
+                e,
+            )
+            # continue silently; frontend will fallback to raw GPS
+
+    return RouteMatchedResponse(route=route_points, matched_routes=matched_routes or None)
 
 
 @router.get("/geofence-events/{technician_id}", response_model=List[GeofenceEventReport])

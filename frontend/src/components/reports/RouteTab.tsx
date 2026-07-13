@@ -36,7 +36,8 @@ interface RoutePoint {
 }
 
 interface RouteTabProps {
-  data?: RoutePoint[]
+  // `data` may be either the legacy RoutePoint[] or the new backend response
+  data?: any
 }
 
 // Utilitários
@@ -90,14 +91,15 @@ export default function RouteTab({ data }: RouteTabProps) {
 
   // --- PROCESSAMENTO DOS DADOS ---
   useEffect(() => {
-    if (!data || data.length < 2) {
+    const rawData: RoutePoint[] = Array.isArray(data) ? (data as RoutePoint[]) : (data?.route as RoutePoint[]) || []
+    if (!rawData || rawData.length < 2) {
       setTrips([])
       setSelectedTrips(new Set())
       return
     }
 
     // Agrupar pontos por journey_index
-    const journeys = data.reduce((acc, point) => {
+    const journeys = rawData.reduce((acc: Record<number, RoutePoint[]>, point: RoutePoint) => {
       const key = point.journey_index ?? 0
       if (!acc[key]) acc[key] = []
       acc[key].push(point)
@@ -108,9 +110,9 @@ export default function RouteTab({ data }: RouteTabProps) {
     const journeyEntries = Object.entries(journeys)
       .map(([journeyIndex, points]) => ({
         journeyIndex: Number(journeyIndex),
-        points,
-        startPoint: points[0],
-        endPoint: points[points.length - 1],
+        points: points as RoutePoint[],
+        startPoint: points[0] as RoutePoint,
+        endPoint: points[points.length - 1] as RoutePoint,
         startAddress: undefined,
         endAddress: undefined,
         loadingAddress: true,
@@ -240,8 +242,10 @@ export default function RouteTab({ data }: RouteTabProps) {
           />
 
           {visibleJourneys.map(({ journeyIndex, points, startPoint, endPoint }) => {
-            const positions: [number, number][] = points.map((p) => [p.latitude, p.longitude])
-            // Encontra o índice sequencial (posição no array trips) para exibir numeração correta
+            const rawPositions: [number, number][] = points.map((p) => [p.latitude, p.longitude])
+            const matchedMap = Array.isArray(data) ? undefined : (data?.matched_routes || {})
+            const matchedPositions = matchedMap ? matchedMap[journeyIndex] : undefined
+            const positions = matchedPositions && matchedPositions.length >= 2 ? matchedPositions : rawPositions
             const sequentialIndex = trips.findIndex(t => t.journeyIndex === journeyIndex) + 1
             const label = `Viagem ${sequentialIndex}`
 

@@ -40,7 +40,14 @@ class Settings(BaseSettings):
     traccar_url: str = Field(default="http://localhost:8082", env="TRACCAR_URL")
     traccar_admin_user: str = Field(default="admin", env="TRACCAR_ADMIN_USER")
     traccar_admin_password: str = Field(default="admin", env="TRACCAR_ADMIN_PASSWORD")
-    
+
+    # Route matching provider settings
+    route_matching_provider: str = Field(default="openrouteservice", env="ROUTE_MATCHING_PROVIDER")
+    ors_url: str = Field(default="https://api.openrouteservice.org", env="ORS_URL")
+    ors_api_key: Optional[str] = Field(default=None, env="ORS_API_KEY")
+    ors_profile: str = Field(default="driving-car", env="ORS_PROFILE")
+    route_matching_cache_size: int = Field(default=128, env="ROUTE_MATCHING_CACHE_SIZE")
+
     # Redis
     redis_url: Optional[str] = "redis://localhost:6379"
     
