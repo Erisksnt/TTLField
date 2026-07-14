@@ -12,6 +12,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const logout = useAuthStore((state) => state.logout)
+  const user = useAuthStore((state) => state.user)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -44,6 +45,9 @@ export default function Layout({ children }: LayoutProps) {
   ]
 
   const isActive = (path: string) => location.pathname === path
+
+  const displayName = user?.full_name || user?.username || user?.email || 'Usuário'
+  const avatarInitial = displayName.charAt(0).toUpperCase()
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -132,9 +136,9 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
-            <span className="text-xs md:text-sm text-gray-600 hidden sm:inline">Administrator</span>
+            <span className="text-xs md:text-sm text-gray-600 max-w-[10rem] truncate">{displayName}</span>
             <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm md:text-base">
-              A
+              {avatarInitial}
             </div>
           </div>
         </header>

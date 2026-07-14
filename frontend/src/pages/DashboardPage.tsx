@@ -7,6 +7,7 @@ import api from '@/services/api'
 import { Technician, Geofence } from '@/types'
 import { Loader, MapPin, AlertCircle, RefreshCw } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
+import { useAuthStore } from '@/store/auth'
 
 interface PositionData {
   latitude: number
@@ -213,6 +214,7 @@ export default function DashboardPage() {
   const markerRefs = useRef<Record<string, LeafletMarker | null>>({})
   const { lastPosition } = useWebSocket()
   const navigate = useNavigate()
+  const user = useAuthStore((state) => state.user)
 
   // Estado para controlar quais grupos estão expandidos
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -307,6 +309,41 @@ export default function DashboardPage() {
   const onlineTechnicians = technicians.filter(t => t.is_online)
   const offlineTechnicians = technicians.filter(t => !t.is_online)
   const lowBattery = technicians.filter(t => (t.battery_level || 100) < 20)
+
+  const techniciansInsideGeofences = useMemo(() => {
+    if (!geofences.length || !technicians.length) return 0
+
+    const activeGeofences = geofences.filter(
+      (geofence) =>
+        geofence.is_active &&
+        geofence.geofence_type === 'circle' &&
+        geofence.center_latitude &&
+        geofence.center_longitude &&
+        geofence.radius
+    )
+
+    if (!activeGeofences.length) return 0
+
+    const insideTechnicianIds = new Set<string>()
+
+    technicians.forEach((tech) => {
+      if (!tech.latitude || !tech.longitude) return
+
+      const isInsideAnyGeofence = activeGeofences.some((geofence) => {
+        const centerLat = parseFloat(geofence.center_latitude!)
+        const centerLng = parseFloat(geofence.center_longitude!)
+        const radius = Number(geofence.radius || 0)
+        const distance = getDistanceMeters(tech.latitude!, tech.longitude!, centerLat, centerLng)
+        return distance <= radius
+      })
+
+      if (isInsideAnyGeofence) {
+        insideTechnicianIds.add(tech.id)
+      }
+    })
+
+    return insideTechnicianIds.size
+  }, [geofences, technicians])
 
   const groupedPositions = useMemo(() => {
     const groups: Array<{ key: string; center: [number, number]; technicians: Technician[] }> = []
@@ -408,8 +445,8 @@ export default function DashboardPage() {
             <p className="text-3xl font-bold text-gray-600 mt-2">{offlineTechnicians.length}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-gray-600 text-sm font-medium">Total</h3>
-            <p className="text-3xl font-bold text-gray-900 mt-2">{technicians.length}</p>
+            <h3 className="text-gray-600 text-sm font-medium">Usuarios em Geofences</h3>
+            <p className="text-3xl font-bold text-gray-900 mt-2">{techniciansInsideGeofences}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-gray-600 text-sm font-medium">Bateria Baixa</h3>
