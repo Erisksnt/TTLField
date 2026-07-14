@@ -1,9 +1,8 @@
 // frontend/src/components/reports/GeofenceTab.tsx
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Circle, Marker, Tooltip, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Tooltip, Popup, useMap } from 'react-leaflet'
 import { Icon, type Marker as LeafletMarker } from 'leaflet'
 import { Clock, MapPin, ArrowRight, ArrowLeft } from 'lucide-react'
-import { useNavigate } from 'react-router/dist/lib/hooks'
 
 // Ícone para pontos de parada
 const stopIcon = new Icon({
@@ -66,20 +65,29 @@ interface GeofenceTabProps {
   stops?: StopPoint[]
 }
 
-function MapFocusController({ position, zoom }: { position: [number, number] | null; zoom: number }) {
+function getPopupOffsetPosition(map: any, position: [number, number], popupOffsetPixels = 180): [number, number] {
+  const zoom = map.getZoom()
+  const point = map.project(position, zoom)
+  point.y -= popupOffsetPixels
+  return map.unproject(point, zoom)
+}
+
+function MapFocusController({ position, popupOffsetPixels = 180 }: { position: [number, number] | null; popupOffsetPixels?: number }) {
   const map = useMap()
 
   useEffect(() => {
     if (!position) return
-    map.flyTo(position, zoom, { duration: 0.7 })
-  }, [map, position, zoom])
+
+    const targetPosition = getPopupOffsetPosition(map, position, popupOffsetPixels)
+    map.flyTo(targetPosition, map.getZoom(), { duration: 0.7 })
+  }, [map, position, popupOffsetPixels])
 
   return null
 }
 
 export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
   const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null)
-  const [focusedStop, setFocusedStop] = useState<[number, number] | null>(null)
+  const [focusedPosition, setFocusedPosition] = useState<[number, number] | null>(null)
 
   const stopMarkersRef = useRef<Record<number, LeafletMarker | null>>({})
 
@@ -134,12 +142,16 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
   const handleStopClick = (stop: StopPoint, index: number) => {
     if (stop.latitude == null || stop.longitude == null) return
     setSelectedStopIndex(index)
-    setFocusedStop([stop.latitude, stop.longitude])
+    setFocusedPosition([stop.latitude, stop.longitude])
 
     const marker = stopMarkersRef.current[index]
     if (marker && marker.openPopup) {
       marker.openPopup()
     }
+  }
+
+  const handleGeofenceEventClick = (event: GeofenceEvent) => {
+    setFocusedPosition([event.latitude, event.longitude])
   }
 
   return (
@@ -164,7 +176,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
               attribution='&copy; OpenStreetMap contributors'
             />
 
-            <MapFocusController position={focusedStop} zoom={16} />
+            <MapFocusController position={focusedPosition} />
 
             {/* Eventos de Geofence (entrada/saída) */}
             {(data ?? []).map((event, index) => {
@@ -175,6 +187,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
                   key={`${event.geofence_name}-${index}`}
                   position={[event.latitude, event.longitude]}
                   icon={icon}
+                  eventHandlers={{ click: () => handleGeofenceEventClick(event) }}
                 >
                   <Tooltip sticky>
                     <div className="text-sm">
@@ -195,6 +208,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
                 ref={(marker) => {
                   stopMarkersRef.current[index] = marker as LeafletMarker | null
                 }}
+                eventHandlers={{ click: () => handleStopClick(stop, index) }}
               >
                 <Tooltip sticky>
                   <div className="text-sm">
@@ -224,7 +238,12 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
               <div key={name} className="border rounded-lg p-2">
                 <p className="font-medium text-sm text-gray-900">{name}</p>
                 {events.map((event, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleGeofenceEventClick(event)}
+                    className="flex w-full items-center gap-2 text-xs text-gray-600 mt-1 text-left hover:text-blue-600"
+                  >
                     {event.event_type === 'enter' ? (
                       <ArrowRight className="w-3 h-3 text-green-600" />
                     ) : (
@@ -233,7 +252,7 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
                     <span>{event.event_type === 'enter' ? 'Entrada' : 'Saída'}</span>
                     <span>•</span>
                     <span>{formatTime(event.timestamp)}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             ))}

@@ -1,5 +1,5 @@
 import { MapContainer, TileLayer, Polyline, Marker, Tooltip } from 'react-leaflet'
-import { Icon } from 'leaflet'
+import { Icon, latLngBounds } from 'leaflet'
 import { Fragment, useState, useEffect, useMemo } from 'react'
 
 // Ícones para os marcadores
@@ -56,6 +56,14 @@ const formatDateTime = (timestamp: string): string => {
   })
 }
 
+const formatTimeOnly = (timestamp: string): string => {
+  return new Date(timestamp).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+  })
+}
+
 // Função para obter endereço via Nominatim (geocodificação reversa)
 async function fetchAddress(lat: number, lng: number): Promise<string> {
   try {
@@ -86,6 +94,8 @@ export default function RouteTab({ data }: RouteTabProps) {
   >([])
   // Conjunto dos índices das viagens selecionadas (exibidas no mapa)
   const [selectedTrips, setSelectedTrips] = useState<Set<number>>(new Set())
+  // Modo de visualização da rota no mapa
+  const [viewMode, setViewMode] = useState<'combined' | 'individual'>('combined')
   // Flag para carregamento dos endereços
   const [loadingAddresses, setLoadingAddresses] = useState(false)
 
@@ -124,8 +134,9 @@ export default function RouteTab({ data }: RouteTabProps) {
 
     // Inicializar estado com loading
     setTrips(journeyEntries)
-    // Selecionar todas por padrão
+    // Selecionar todas por padrão e exibir a rota completa
     setSelectedTrips(new Set(journeyEntries.map((t) => t.journeyIndex)))
+    setViewMode('combined')
 
     // Buscar endereços para cada viagem
     setLoadingAddresses(true)
@@ -165,9 +176,11 @@ export default function RouteTab({ data }: RouteTabProps) {
 
   const toggleAll = () => {
     if (selectedTrips.size === trips.length) {
-      setSelectedTrips(new Set()) // desmarca todos
+      setSelectedTrips(new Set())
+      setViewMode('individual')
     } else {
-      setSelectedTrips(new Set(trips.map((t) => t.journeyIndex))) // marca todos
+      setSelectedTrips(new Set(trips.map((t) => t.journeyIndex)))
+      setViewMode('combined')
     }
   }
 
@@ -193,6 +206,22 @@ export default function RouteTab({ data }: RouteTabProps) {
     const avgSpeed = totalTime > 0 ? (totalDistance / totalTime) * 3600 : 0
     return { totalDistance, totalTime, maxSpeed, avgSpeed, totalPoints: visiblePoints.length }
   }, [visibleJourneys])
+
+  const getRoutePositions = (journey: { points: RoutePoint[]; journeyIndex: number }) => {
+    const rawPositions: [number, number][] = journey.points.map((point) => [point.latitude, point.longitude] as [number, number])
+    const matchedMap = Array.isArray(data) ? undefined : (data?.matched_routes || {})
+    const matchedPositions = matchedMap ? matchedMap[journey.journeyIndex] : undefined
+    return matchedPositions && matchedPositions.length >= 2 ? matchedPositions : rawPositions
+  }
+
+  const routePositions = useMemo((): [number, number][] => {
+    return visibleJourneys.flatMap((journey) => getRoutePositions(journey))
+  }, [visibleJourneys, data])
+
+  const routeBounds = useMemo(() => {
+    if (routePositions.length === 0) return undefined
+    return latLngBounds(routePositions)
+  }, [routePositions])
 
   // --- CENTRO DO MAPA (baseado nas viagens visíveis) ---
   const center = useMemo(() => {
@@ -221,18 +250,38 @@ export default function RouteTab({ data }: RouteTabProps) {
 
   return (
     <div>
-      {/* Resumo das viagens visíveis */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-        <p className="text-sm text-blue-700">
-          <strong>Rota percorrida</strong> - {stats.totalPoints} pontos em {visibleJourneys.length} viagem(ns).
-          Distância total: <strong>{stats.totalDistance.toFixed(2)} km</strong>
-        </p>
+      {/* MAPA */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-medium text-gray-700">Visualização da rota</div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('combined')
+              setSelectedTrips(new Set(trips.map((trip) => trip.journeyIndex)))
+            }}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'combined' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Rota combinada
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('individual')}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+              viewMode === 'individual' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Viagens individuais
+          </button>
+        </div>
       </div>
 
-      {/* MAPA */}
       <div className="h-96 rounded-lg overflow-hidden border">
         <MapContainer
           center={[center.lat, center.lng]}
+          bounds={routeBounds}
           zoom={14}
           style={{ height: '100%', width: '100%', zIndex: 1 }}
         >
@@ -241,38 +290,62 @@ export default function RouteTab({ data }: RouteTabProps) {
             attribution='&copy; OpenStreetMap contributors'
           />
 
-          {visibleJourneys.map(({ journeyIndex, points, startPoint, endPoint }) => {
-            const rawPositions: [number, number][] = points.map((p) => [p.latitude, p.longitude])
-            const matchedMap = Array.isArray(data) ? undefined : (data?.matched_routes || {})
-            const matchedPositions = matchedMap ? matchedMap[journeyIndex] : undefined
-            const positions = matchedPositions && matchedPositions.length >= 2 ? matchedPositions : rawPositions
-            const sequentialIndex = trips.findIndex(t => t.journeyIndex === journeyIndex) + 1
-            const label = `Viagem ${sequentialIndex}`
+          {viewMode === 'combined' ? (
+            <Fragment>
+              <Polyline positions={routePositions} color="#3b82f6" weight={4} opacity={0.8} />
+              {visibleJourneys.length > 0 && (
+                <Fragment>
+                  <Marker position={[visibleJourneys[0].startPoint.latitude, visibleJourneys[0].startPoint.longitude]} icon={startIcon}>
+                    <Tooltip sticky>
+                      <div className="text-sm">
+                        <p className="font-semibold text-green-700">Início</p>
+                        <p className="text-gray-600">{formatDateTime(visibleJourneys[0].startPoint.timestamp)}</p>
+                      </div>
+                    </Tooltip>
+                  </Marker>
 
-            return (
-              <Fragment key={journeyIndex}>
-                <Polyline positions={positions} color="#3b82f6" weight={4} opacity={0.8} />
+                  <Marker position={[visibleJourneys[visibleJourneys.length - 1].endPoint.latitude, visibleJourneys[visibleJourneys.length - 1].endPoint.longitude]} icon={endIcon}>
+                    <Tooltip sticky>
+                      <div className="text-sm">
+                        <p className="font-semibold text-red-700">Fim</p>
+                        <p className="text-gray-600">{formatDateTime(visibleJourneys[visibleJourneys.length - 1].endPoint.timestamp)}</p>
+                      </div>
+                    </Tooltip>
+                  </Marker>
+                </Fragment>
+              )}
+            </Fragment>
+          ) : (
+            visibleJourneys.map(({ journeyIndex, points, startPoint, endPoint }) => {
+              const positions = getRoutePositions({ journeyIndex, points })
+              const sequentialIndex = trips.findIndex((t) => t.journeyIndex === journeyIndex) + 1
+              const label = `Viagem ${sequentialIndex}`
 
-                <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
-                  <Tooltip sticky>
-                    <div className="text-sm">
-                      <p className="font-semibold text-green-700">Início - {label}</p>
-                      <p className="text-gray-600">{formatDateTime(startPoint.timestamp)}</p>
-                    </div>
-                  </Tooltip>
-                </Marker>
+              return (
+                <Fragment key={journeyIndex}>
+                  <Polyline positions={positions} color="#3b82f6" weight={4} opacity={0.8} />
 
-                <Marker position={[endPoint.latitude, endPoint.longitude]} icon={endIcon}>
-                  <Tooltip sticky>
-                    <div className="text-sm">
-                      <p className="font-semibold text-red-700">Fim - {label}</p>
-                      <p className="text-gray-600">{formatDateTime(endPoint.timestamp)}</p>
-                    </div>
-                  </Tooltip>
-                </Marker>
-              </Fragment>
-            )
-          })}
+                  <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
+                    <Tooltip sticky>
+                      <div className="text-sm">
+                        <p className="font-semibold text-green-700">Início - {label}</p>
+                        <p className="text-gray-600">{formatDateTime(startPoint.timestamp)}</p>
+                      </div>
+                    </Tooltip>
+                  </Marker>
+
+                  <Marker position={[endPoint.latitude, endPoint.longitude]} icon={endIcon}>
+                    <Tooltip sticky>
+                      <div className="text-sm">
+                        <p className="font-semibold text-red-700">Fim - {label}</p>
+                        <p className="text-gray-600">{formatDateTime(endPoint.timestamp)}</p>
+                      </div>
+                    </Tooltip>
+                  </Marker>
+                </Fragment>
+              )
+            })
+          )}
         </MapContainer>
       </div>
 
@@ -313,9 +386,9 @@ export default function RouteTab({ data }: RouteTabProps) {
                   <div className="flex-1 text-sm">
                     <div className="font-medium text-gray-800">
                       Viagem {idx + 1}
-                      <span className="ml-2 text-xs text-gray-500">
-                        {trip.points.length} pontos
-                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      {formatTimeOnly(trip.startPoint.timestamp)} → {formatTimeOnly(trip.endPoint.timestamp)}
                     </div>
                     <div className="text-gray-600">
                       <span className="font-semibold text-green-600">Saída:</span>{' '}
