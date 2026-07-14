@@ -39,6 +39,9 @@ class ReportService:
     SHORT_STOP_THRESHOLD_MINUTES = 2
     MIN_MOVEMENT_DISTANCE_M = 60
     MIN_SPEED_KMH = 1.0
+    MAX_REALISTIC_SPEED_KMH = 250.0
+    MAX_SPEED_DISCREPANCY_FACTOR = 5.0
+    MAX_SPEED_DISCREPANCY_DELTA = 150.0
 
     @staticmethod
     def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
@@ -239,7 +242,15 @@ class ReportService:
             )
             inferred_speed_kmh = (distance_m / 1000) / (time_seconds / 3600)
             gps_speed_kmh = cls._speed_kmh(curr)
-            speed_kmh = max(inferred_speed_kmh, gps_speed_kmh or 0.0)
+            validated_gps_speed_kmh = cls._validate_provider_speed(
+                gps_speed_kmh,
+                distance_m,
+                inferred_speed_kmh,
+            )
+            speed_kmh = validated_gps_speed_kmh if validated_gps_speed_kmh is not None else inferred_speed_kmh
+            if speed_kmh is None or speed_kmh < 0 or speed_kmh > cls.MAX_REALISTIC_SPEED_KMH:
+                speed_kmh = 0.0
+
             is_moving = (
                 distance_m >= cls.MIN_MOVEMENT_DISTANCE_M
                 and speed_kmh >= cls.MIN_SPEED_KMH
@@ -257,6 +268,41 @@ class ReportService:
             })
 
         return segments
+
+    @classmethod
+    def _is_valid_speed(cls, speed_kmh: float) -> bool:
+        return speed_kmh >= 0 and speed_kmh <= cls.MAX_REALISTIC_SPEED_KMH
+
+    @classmethod
+    def _validate_provider_speed(
+        cls,
+        gps_speed_kmh: Optional[float],
+        distance_m: float,
+        inferred_speed_kmh: float,
+    ) -> Optional[float]:
+        if gps_speed_kmh is None:
+            return None
+
+        if not cls._is_valid_speed(gps_speed_kmh):
+            return None
+
+        if distance_m < cls.MIN_MOVEMENT_DISTANCE_M and gps_speed_kmh >= cls.MIN_SPEED_KMH:
+            return None
+
+        if gps_speed_kmh < cls.MIN_SPEED_KMH and inferred_speed_kmh >= cls.MIN_SPEED_KMH:
+            return None
+
+        if inferred_speed_kmh > 0:
+            lower = min(gps_speed_kmh, inferred_speed_kmh)
+            higher = max(gps_speed_kmh, inferred_speed_kmh)
+            ratio = higher / max(lower, 1.0)
+            if (
+                ratio > cls.MAX_SPEED_DISCREPANCY_FACTOR
+                and abs(gps_speed_kmh - inferred_speed_kmh) > cls.MAX_SPEED_DISCREPANCY_DELTA
+            ):
+                return None
+
+        return gps_speed_kmh
 
     @classmethod
     def _build_journey_from_segments(cls, segments: List[Dict]) -> Optional[Journey]:

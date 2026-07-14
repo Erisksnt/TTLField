@@ -119,7 +119,45 @@ class TestReportService:
         assert metrics['total_distance_km'] < 0.5, \
             f"Distância deveria ser ~0, obteve {metrics['total_distance_km']} km"
         print(f"✅ Teste GPS jitter: {metrics['total_distance_km']} km (corretamente ignorado)")
-    
+
+    def test_max_speed_ignores_unrealistic_jumps(self):
+        """
+        Testa se saltos de GPS irrealistas não são considerados para a velocidade máxima.
+        """
+        base_time = datetime(2026, 6, 22, 12, 0, 0)
+        positions = []
+
+        # Viagem válida: 1 km em 5 minutos (~12 km/h)
+        positions.append(self.create_position(-23.5505, -46.6333, base_time, speed=0.0))
+        positions.append(self.create_position(-23.5415, -46.6333, base_time + timedelta(minutes=5), speed=3.3))
+
+        # Salto de GPS irrealista: 500 km em 1 segundo
+        positions.append(self.create_position(-19.0000, -46.6333, base_time + timedelta(minutes=5, seconds=1), speed=0.0))
+
+        metrics = ReportService.calculate_report_metrics(positions)
+
+        assert metrics['max_speed_kmh'] < 100, \
+            f"Velocidade máxima irrealista deveria ser filtrada, obteve {metrics['max_speed_kmh']}"
+        assert metrics['journeys_count'] == 1, \
+            f"Salto irrealista não deve criar nova viagem, obteve {metrics['journeys_count']}"
+        print(f"✅ Teste velocidade máxima irrealista: {metrics['max_speed_kmh']} km/h (filtrado corretamente)")
+
+    def test_max_speed_uses_valid_provider_speed(self):
+        """
+        Testa se a velocidade fornecida pelo GPS é usada quando ela é plausível.
+        """
+        base_time = datetime(2026, 6, 22, 13, 0, 0)
+        positions = []
+
+        positions.append(self.create_position(-23.5505, -46.6333, base_time, speed=0.0))
+        positions.append(self.create_position(-23.5500, -46.6333, base_time + timedelta(seconds=10), speed=15.0))
+
+        metrics = ReportService.calculate_report_metrics(positions)
+
+        assert metrics['max_speed_kmh'] == 54.0, \
+            f"Velocidade máxima deveria usar valor do provedor válido, obteve {metrics['max_speed_kmh']}"
+        print(f"✅ Teste velocidade provedora válida: {metrics['max_speed_kmh']} km/h (usado corretamente)")
+
     def test_parada_curta_nao_separa_viagem(self):
         """
         Testa se paradas curtas (< 30 min) não encerram a viagem
