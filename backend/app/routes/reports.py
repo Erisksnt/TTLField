@@ -467,6 +467,7 @@ async def get_stops(
         return []
 
     stops_data = ReportService.identify_stops(positions_data, min_stop_duration_minutes=2)
+    await ReportService.ensure_stop_addresses(stops_data)
     stops = [
         StopPoint(
             latitude=stop["latitude"],

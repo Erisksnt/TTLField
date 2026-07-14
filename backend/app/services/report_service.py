@@ -1,7 +1,11 @@
+import asyncio
 import logging
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+import httpx
 
 from app.services.tracking_service import TrackingService
 
@@ -275,6 +279,10 @@ class ReportService:
             segments=segments,
         )
 
+    _reverse_geocode_cache: "OrderedDict[Tuple[float, float], Optional[str]]" = OrderedDict()
+    REVERSE_GEOCODING_CACHE_SIZE = 256
+    REVERSE_GEOCODING_URL = "https://nominatim.openstreetmap.org/reverse"
+
     @classmethod
     def _append_stop(cls, stops: List[Dict], stop_segments: List[Dict], min_stop_duration_minutes: int):
         if not stop_segments:
@@ -298,6 +306,68 @@ class ReportService:
             "duration_minutes": round(duration_minutes, 1),
             "address": cls._position_address(middle_position),
         })
+
+    @classmethod
+    def _reverse_geocode_cache_key(cls, latitude: float, longitude: float) -> Tuple[float, float]:
+        return (round(latitude, 6), round(longitude, 6))
+
+    @classmethod
+    async def reverse_geocode_coordinates(cls, latitude: float, longitude: float) -> Optional[str]:
+        key = cls._reverse_geocode_cache_key(latitude, longitude)
+        if key in cls._reverse_geocode_cache:
+            cls._reverse_geocode_cache.move_to_end(key)
+            return cls._reverse_geocode_cache[key]
+
+        params = {
+            "format": "json",
+            "lat": latitude,
+            "lon": longitude,
+            "zoom": 18,
+            "addressdetails": 1,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(cls.REVERSE_GEOCODING_URL, params=params, headers={"User-Agent": "TTLField/1.0"})
+                if response.status_code != 200:
+                    logger.warning("Reverse geocoding failed for %s,%s: HTTP %s", latitude, longitude, response.status_code)
+                    address = None
+                else:
+                    data = response.json()
+                    address = data.get("display_name") if isinstance(data, dict) else None
+        except Exception as exc:
+            logger.warning("Reverse geocoding error for %s,%s: %s", latitude, longitude, exc)
+            address = None
+
+        cls._reverse_geocode_cache[key] = address
+        if len(cls._reverse_geocode_cache) > cls.REVERSE_GEOCODING_CACHE_SIZE:
+            cls._reverse_geocode_cache.popitem(last=False)
+        return address
+
+    @classmethod
+    async def ensure_stop_addresses(cls, stops: List[Dict]) -> None:
+        if not stops:
+            return
+
+        coords_to_task: Dict[Tuple[float, float], asyncio.Task] = {}
+        for stop in stops:
+            if stop.get("address"):
+                continue
+            coord_key = cls._reverse_geocode_cache_key(stop["latitude"], stop["longitude"])
+            if coord_key not in coords_to_task:
+                coords_to_task[coord_key] = asyncio.create_task(
+                    cls.reverse_geocode_coordinates(stop["latitude"], stop["longitude"])
+                )
+
+        if not coords_to_task:
+            return
+
+        await asyncio.gather(*coords_to_task.values())
+
+        for stop in stops:
+            if stop.get("address"):
+                continue
+            coord_key = cls._reverse_geocode_cache_key(stop["latitude"], stop["longitude"])
+            stop["address"] = coords_to_task[coord_key].result()
 
     @classmethod
     def _sorted_positions(cls, positions_data: List[Dict]) -> List[Dict]:

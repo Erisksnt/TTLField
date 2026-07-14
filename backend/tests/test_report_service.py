@@ -184,6 +184,28 @@ class TestReportService:
                 f"Parada deveria ter ~5 min, obteve {stops[0]['duration_minutes']}"
         print(f"✅ Teste paradas: {len(stops)} parada(s) identificada(s)")
     
+    def test_reverse_geocode_cache_and_address_resolution(self):
+        base_time = datetime(2026, 6, 22, 10, 0, 0)
+        positions = []
+        for i in range(4):
+            pos_time = base_time + timedelta(minutes=i)
+            positions.append(self.create_position(-23.5505, -46.6333, pos_time, speed=0))
+
+        stops = ReportService.identify_stops(positions, min_stop_duration_minutes=2)
+        assert len(stops) == 1
+
+        # Populate cache manually and ensure no duplicate HTTP calls are needed.
+        key = ReportService._reverse_geocode_cache_key(stops[0]["latitude"], stops[0]["longitude"])
+        ReportService._reverse_geocode_cache.clear()
+        ReportService._reverse_geocode_cache[key] = "Avenida da Aldeia, 927 - SP"
+
+        # If address already exists in cache, ensure_stop_addresses should reuse it.
+        import asyncio
+        asyncio.run(ReportService.ensure_stop_addresses(stops))
+
+        assert stops[0]["address"] == "Avenida da Aldeia, 927 - SP"
+        print("✅ Teste cache reverse geocode: endereço reutilizado corretamente")
+    
     def test_velocidade_media_com_parada_curta(self):
         """
         Cenário: 30 min a 60 km/h + 5 min parado + 30 min a 60 km/h

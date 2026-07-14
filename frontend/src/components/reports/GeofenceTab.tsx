@@ -1,11 +1,22 @@
 // frontend/src/components/reports/GeofenceTab.tsx
-import { MapContainer, TileLayer, Circle, Marker, Tooltip } from 'react-leaflet'
-import { Icon } from 'leaflet'
+import { useEffect, useRef, useState } from 'react'
+import { MapContainer, TileLayer, Circle, Marker, Tooltip, Popup, useMap } from 'react-leaflet'
+import { Icon, type Marker as LeafletMarker } from 'leaflet'
 import { Clock, MapPin, ArrowRight, ArrowLeft } from 'lucide-react'
+import { useNavigate } from 'react-router/dist/lib/hooks'
 
 // Ícone para pontos de parada
 const stopIcon = new Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+})
+
+const selectedStopIcon = new Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
@@ -55,7 +66,23 @@ interface GeofenceTabProps {
   stops?: StopPoint[]
 }
 
+function MapFocusController({ position, zoom }: { position: [number, number] | null; zoom: number }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!position) return
+    map.flyTo(position, zoom, { duration: 0.7 })
+  }, [map, position, zoom])
+
+  return null
+}
+
 export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
+  const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null)
+  const [focusedStop, setFocusedStop] = useState<[number, number] | null>(null)
+
+  const stopMarkersRef = useRef<Record<number, LeafletMarker | null>>({})
+
   const hasGeofenceEvents = Boolean(data && data.length > 0)
   const hasStops = Boolean(stops && stops.length > 0)
 
@@ -104,11 +131,22 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
     ? data!.reduce((sum, e) => sum + e.longitude, 0) / data!.length
     : stops!.reduce((sum, stop) => sum + stop.longitude, 0) / stops!.length
 
+  const handleStopClick = (stop: StopPoint, index: number) => {
+    if (stop.latitude == null || stop.longitude == null) return
+    setSelectedStopIndex(index)
+    setFocusedStop([stop.latitude, stop.longitude])
+
+    const marker = stopMarkersRef.current[index]
+    if (marker && marker.openPopup) {
+      marker.openPopup()
+    }
+  }
+
   return (
     <div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
         <p className="text-sm text-blue-700">
-          <strong>Eventos de Geofence</strong> – {hasGeofenceEvents ? `${data!.length} evento(s) registrado(s) no período.` : 'Nenhum evento de geofence encontrado no período.'}
+          <strong>Eventos de Geofence</strong> - {hasGeofenceEvents ? `${data!.length} evento(s) registrado(s) no período.` : 'Nenhum evento de geofence encontrado no período.'}
           {hasStops && ` • ${stops!.length} parada(s) identificada(s).`}
         </p>
       </div>
@@ -125,6 +163,8 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; OpenStreetMap contributors'
             />
+
+            <MapFocusController position={focusedStop} zoom={16} />
 
             {/* Eventos de Geofence (entrada/saída) */}
             {(data ?? []).map((event, index) => {
@@ -151,7 +191,10 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
               <Marker
                 key={`stop-${index}`}
                 position={[stop.latitude, stop.longitude]}
-                icon={stopIcon}
+                icon={selectedStopIndex === index ? selectedStopIcon : stopIcon}
+                ref={(marker) => {
+                  stopMarkersRef.current[index] = marker as LeafletMarker | null
+                }}
               >
                 <Tooltip sticky>
                   <div className="text-sm">
@@ -162,6 +205,9 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
                     </p>
                   </div>
                 </Tooltip>
+                <Popup>
+                  <StopPopup stop={stop} index={index} />
+                </Popup>
               </Marker>
             ))}
           </MapContainer>
@@ -201,24 +247,65 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
               </h3>
               <div className="space-y-2">
                 {stops.map((stop, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleStopClick(stop, index)}
+                    className="w-full text-left flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50"
+                  >
                     <div>
                       <p className="text-sm font-medium">Parada {index + 1}</p>
                       <p className="text-xs text-gray-500">
                         {formatTime(stop.start_time)} - {formatTime(stop.end_time)}
                       </p>
-                      {stop.address && (
-                        <p className="text-xs text-gray-500 max-w-[180px] truncate">{stop.address}</p>
-                      )}
+                      <p className="text-xs text-gray-500">
+                        Duração: {formatDuration(stop.duration_minutes)}
+                      </p>
+                      <p className="text-xs text-gray-500 max-w-[180px] truncate">
+                        Address: {stop.address || "Address unavailable"}
+                      </p>
                     </div>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                      {formatDuration(stop.duration_minutes)}
-                    </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StopPopup({ stop, index }: { stop: StopPoint; index: number }) {
+  const formatTime = (isoString: string) => {
+    const date = new Date(isoString)
+    return date.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const formatDuration = (minutes: number) => {
+    if (minutes < 1) return `${Math.round(minutes * 60)}s`
+    if (minutes < 60) return `${Math.round(minutes)}min`
+    const hours = Math.floor(minutes / 60)
+    const mins = Math.round(minutes % 60)
+    return `${hours}h ${mins}min`
+  }
+
+  return (
+    <div className="text-sm max-w-xs rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="space-y-2">
+        <div>
+          <p className="font-semibold text-gray-900">Parada {index + 1}</p>
+        </div>
+        <div className="text-gray-600 text-sm space-y-1">
+          <p>Duração: {formatDuration(stop.duration_minutes)}</p>
+          <p>{formatTime(stop.start_time)} - {formatTime(stop.end_time)}</p>
+          <p>Endereço: {stop.address || 'Indisponível'}</p>
         </div>
       </div>
     </div>
