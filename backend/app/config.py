@@ -57,8 +57,17 @@ class Settings(BaseSettings):
     battery_alert_threshold: int = 15
     
     # Data Retention
-    position_retention_days: int = 90
-    event_retention_days: int = 365
+    # Quantos dias de histórico manter antes da limpeza automática apagar os registros.
+    # Configuráveis via variáveis de ambiente POSITION_RETENTION_DAYS / EVENT_RETENTION_DAYS.
+    position_retention_days: int = Field(default=90, env="POSITION_RETENTION_DAYS")
+    event_retention_days: int = Field(default=180, env="EVENT_RETENTION_DAYS")
+
+    # A cada quantas horas o job de limpeza roda (padrão: 24h = uma vez por dia)
+    retention_cleanup_interval_hours: int = Field(default=24, env="RETENTION_CLEANUP_INTERVAL_HOURS")
+    # Quantos registros são apagados por lote, para não travar o banco com um DELETE gigante
+    retention_cleanup_batch_size: int = Field(default=500, env="RETENTION_CLEANUP_BATCH_SIZE")
+    # Permite desligar a limpeza automática sem remover o código (ex: ambientes de teste)
+    retention_cleanup_enabled: bool = Field(default=True, env="RETENTION_CLEANUP_ENABLED")
     
     class Config:
         env_file = ".env"

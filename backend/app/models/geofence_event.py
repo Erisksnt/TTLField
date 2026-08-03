@@ -10,7 +10,7 @@ class GeofenceEvent(Base):
     device_id = Column(Integer, nullable=False, index=True)  # ID do dispositivo no Traccar
     geofence_id = Column(String, ForeignKey("geofences.id"), nullable=False, index=True)
     event_type = Column(String, nullable=False)  # 'enter' ou 'exit'
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     duration_seconds = Column(Integer, nullable=True)
