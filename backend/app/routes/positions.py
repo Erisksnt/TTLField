@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.position import PositionCreate, PositionResponse, PositionBulkCreate
 from app.services.tracking_service import TrackingService
+from app.models.user import User
+from app.utils.dependencies import get_current_user
 import logging
 
 router = APIRouter(prefix="/positions", tags=["tracking"])
@@ -15,6 +17,7 @@ async def create_position(
     device_id: str,
     position: PositionCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Criar nova posição (enviada pelo app mobile)"""
     try:
@@ -36,6 +39,7 @@ async def create_positions_bulk(
     device_id: str,
     bulk: PositionBulkCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Criar múltiplas posições em um batch (offline sync)"""
     try:
@@ -65,6 +69,7 @@ async def get_technician_history(
     hours: int = 24,
     limit: int = 1000,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obter histórico de posições de um técnico"""
     try:
@@ -91,6 +96,7 @@ async def get_technician_history(
 @router.get("/current/all", response_model=list[dict])
 async def get_all_current_positions(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obter posição atual de todos os técnicos online (para mapa em tempo real)"""
     try:
@@ -110,6 +116,7 @@ async def get_distance_traveled(
     start_datetime: str,
     end_datetime: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Calcular distância percorrida num período"""
     try:

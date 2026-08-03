@@ -4,9 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.user import UserCreate, UserLogin, TokenResponse
 from app.services.auth_service import AuthService
-from app.utils.jwt import get_user_from_token, verify_token
+from app.utils.jwt import verify_token
 from app.services.logout_service import LogoutService
 from app.utils.rate_limit import limiter
+from app.models.user import User
+from app.utils.dependencies import get_current_user, require_roles
 import logging
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -82,27 +84,52 @@ async def refresh_token(
         )
 
 
-@router.get("/me", response_model=dict)
-async def get_current_user(
-    authorization: str = Header(None),
+@router.post("/users", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def create_user_with_role(
+    user_create: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin")),
 ):
-    """Obter informações do usuário autenticado"""
-    if not authorization or not authorization.startswith("Bearer "):
+    """
+    Criar usuário com papel (role) livre: user, manager, supervisor ou admin.
+
+    Protegido - só um admin autenticado pode chamar esta rota. Use este
+    endpoint (em vez de /auth/register) sempre que precisar criar uma
+    conta com privilégio acima de "user".
+    """
+    try:
+        result = await AuthService.create_user_by_admin(db, user_create)
+        return {"message": "Usuário criado com sucesso", **result}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Erro ao criar usuário: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token não fornecido",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao criar usuário",
         )
-    
-    token = authorization.split(" ")[1]
-    user = get_user_from_token(token)
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido",
-        )
-    
-    return user
+
+
+@router.get("/me", response_model=dict)
+async def read_current_user_profile(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obter informações do usuário autenticado.
+
+    Antes, esta rota só decodificava o JWT e devolvia {"id", "email"}
+    (o token nunca carregava full_name/username) - por isso o header do
+    frontend sempre caia no fallback do e-mail, mesmo quando o usuário
+    tinha um nome cadastrado. Agora busca o usuário completo no banco.
+    """
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "is_admin": current_user.is_admin,
+    }
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)

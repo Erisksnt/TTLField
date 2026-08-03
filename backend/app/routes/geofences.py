@@ -5,6 +5,8 @@ from sqlalchemy.future import select
 from app.database import get_db
 from app.models.geofence import Geofence
 from app.schemas.geofence import GeofenceCreate, GeofenceResponse, GeofenceUpdate
+from app.models.user import User
+from app.utils.dependencies import get_current_user, require_roles
 import logging
 
 router = APIRouter(prefix="/geofences", tags=["geofences"])
@@ -15,6 +17,7 @@ logger = logging.getLogger(__name__)
 async def create_geofence(
     geofence: GeofenceCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager", "supervisor")),
 ):
     """Criar novo geofence"""
     try:
@@ -39,6 +42,7 @@ async def list_geofences(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Listar todos os geofences"""
     try:
@@ -59,6 +63,7 @@ async def list_geofences(
 async def get_geofence(
     geofence_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obter detalhes de um geofence"""
     try:
@@ -89,6 +94,7 @@ async def update_geofence(
     geofence_id: str,
     geofence_update: GeofenceUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager", "supervisor")),
 ):
     """Atualizar geofence"""
     try:
@@ -125,6 +131,7 @@ async def update_geofence(
 async def delete_geofence(
     geofence_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager")),
 ):
     """Soft delete - marcar como deletado"""
     try:

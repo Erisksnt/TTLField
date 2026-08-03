@@ -11,6 +11,8 @@ from app.schemas.technician import (
     TechnicianUpdate,
 )
 from app.services.traccar_service import TraccarService
+from app.models.user import User
+from app.utils.dependencies import get_current_user, require_roles
 import logging
 
 router = APIRouter(prefix="/technicians", tags=["technicians"])
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 async def create_technician(
     technician: TechnicianCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager", "supervisor")),
 ):
     try:
         # Verifica se employee_id já existe no banco (não deletado)
@@ -78,6 +81,7 @@ async def list_technicians(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Listar todos os técnicos"""
     try:
@@ -104,6 +108,7 @@ async def list_technicians(
 async def get_technician(
     technician_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obter detalhes de um técnico"""
     try:
@@ -136,6 +141,7 @@ async def update_technician(
     technician_id: str,
     technician_update: TechnicianUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager", "supervisor")),
 ):
     """Atualizar informações de um técnico"""
     try:
@@ -174,6 +180,7 @@ async def update_technician(
 async def delete_technician(
     technician_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles("admin", "manager")),
 ):
     """Soft delete - marcar como deletado e remover do Traccar"""
     try:

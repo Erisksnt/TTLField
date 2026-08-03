@@ -24,6 +24,8 @@ from app.services.tracking_service import TrackingService
 from app.services.traccar_service import TraccarService
 from app.services.report_service import ReportService
 from app.services.route_matching_service import RouteMatchingService
+from app.models.user import User
+from app.utils.dependencies import get_current_user
 
 # --- Suporte a fuso horário ---
 try:
@@ -72,7 +74,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/health/traccar")
-async def check_traccar_health():
+async def check_traccar_health(current_user: User = Depends(get_current_user)):
     """Verifica conexão com o servidor Traccar."""
     try:
         traccar = TraccarService()
@@ -119,6 +121,7 @@ async def get_report_summary(
     start_date: str = Query(..., description="Data inicial (ISO 8601)"),
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtém o resumo das estatísticas de um técnico em um período."""
     try:
@@ -213,6 +216,7 @@ async def get_route(
     start_date: str = Query(..., description="Data inicial (ISO 8601)"),
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtém os pontos da rota de um técnico em um período."""
     try:
@@ -284,6 +288,7 @@ async def get_route_matched(
     start_date: str = Query(..., description="Data inicial (ISO 8601)"),
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtém os pontos da rota e, opcionalmente, a geometria casada pelo provedor de rota."""
     try:
@@ -385,6 +390,7 @@ async def get_geofence_events(
     start_date: str = Query(..., description="Data inicial (ISO 8601)"),
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtém os eventos de geofence de um técnico em um período."""
     try:
@@ -437,6 +443,7 @@ async def get_stops(
     start_date: str = Query(..., description="Data inicial (ISO 8601)"),
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtém os pontos de parada de um técnico em um período."""
     try:
@@ -489,6 +496,7 @@ async def get_alerts_report(
     start_date: str = Query(..., description="Data inicial (ISO 8601)"),
     end_date: str = Query(..., description="Data final (ISO 8601)"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Obtém os alertas de um técnico em um período."""
     try:

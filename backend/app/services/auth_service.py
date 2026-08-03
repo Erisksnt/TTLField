@@ -15,7 +15,17 @@ settings = get_settings()
 class AuthService:
     @staticmethod
     async def register(db: AsyncSession, user_create: UserCreate) -> dict:
-        """Registrar novo usuário"""
+        """
+        Registrar novo usuário via endpoint público (/auth/register).
+
+        IMPORTANTE: este é um endpoint sem autenticação, então o `role`
+        enviado pelo cliente é IGNORADO de propósito - todo autorregistro
+        vira "user" comum. Antes, um visitante podia se registrar
+        diretamente como "admin" só escolhendo o campo `role` no corpo
+        da requisição (privilege escalation). Para criar contas com
+        papel elevado (manager/supervisor/admin), use
+        `AuthService.create_user_by_admin`, que exige um admin logado.
+        """
         # Verificar se usuário já existe
         stmt = select(User).where(
             (User.email == user_create.email) | (User.username == user_create.username)
@@ -27,14 +37,14 @@ class AuthService:
                 detail="Email ou username já cadastrado",
             )
         
-        # Criar novo usuário
+        # Criar novo usuário - role sempre "user" no autorregistro público
         hashed_password = hash_password(user_create.password)
         db_user = User(
             email=user_create.email,
             username=user_create.username,
             hashed_password=hashed_password,
             full_name=user_create.full_name,
-            role=user_create.role,
+            role="user",
         )
         
         db.add(db_user)
@@ -42,6 +52,42 @@ class AuthService:
         await db.refresh(db_user)
         
         return {"id": db_user.id, "email": db_user.email}
+
+    @staticmethod
+    async def create_user_by_admin(db: AsyncSession, user_create: UserCreate) -> dict:
+        """
+        Criar usuário com `role` livre (manager/supervisor/admin/user).
+
+        Só deve ser chamado a partir de uma rota protegida por
+        `require_roles("admin")` - o papel aqui é confiável porque quem
+        está chamando já é um admin autenticado, diferente do
+        autorregistro público em `register`.
+        """
+        stmt = select(User).where(
+            (User.email == user_create.email) | (User.username == user_create.username)
+        )
+        result = await db.execute(stmt)
+        if result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email ou username já cadastrado",
+            )
+
+        hashed_password = hash_password(user_create.password)
+        db_user = User(
+            email=user_create.email,
+            username=user_create.username,
+            hashed_password=hashed_password,
+            full_name=user_create.full_name,
+            role=user_create.role,
+            is_admin=(user_create.role == "admin"),
+        )
+
+        db.add(db_user)
+        await db.commit()
+        await db.refresh(db_user)
+
+        return {"id": db_user.id, "email": db_user.email, "role": db_user.role}
 
     @staticmethod
     async def login(db: AsyncSession, credentials: UserLogin) -> TokenResponse:
