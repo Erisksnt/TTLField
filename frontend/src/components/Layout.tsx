@@ -75,9 +75,17 @@ export default function Layout({ children }: LayoutProps) {
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1 hover:bg-gray-800 rounded ml-auto"
+            className={`p-1 hover:bg-gray-800 rounded ${sidebarOpen ? 'ml-auto' : 'mx-auto'}`}
           >
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            {sidebarOpen ? (
+              <X size={20} />
+            ) : (
+              <img
+                src="/logo-title.png"
+                alt="Abrir menu"
+                className="h-8 w-8 object-contain"
+              />
+            )}
           </button>
         </div>
 

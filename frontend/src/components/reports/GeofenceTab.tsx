@@ -156,13 +156,6 @@ export default function GeofenceTab({ data, stops }: GeofenceTabProps) {
 
   return (
     <div>
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-        <p className="text-sm text-blue-700">
-          <strong>Eventos de Geofence</strong> - {hasGeofenceEvents ? `${data!.length} evento(s) registrado(s) no período.` : 'Nenhum evento de geofence encontrado no período.'}
-          {hasStops && ` • ${stops!.length} parada(s) identificada(s).`}
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Mapa */}
         <div className="lg:col-span-2 h-96 rounded-lg overflow-hidden border">
