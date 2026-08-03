@@ -10,10 +10,11 @@ import asyncio
 
 from app.config import get_settings
 from app.database import init_db, close_db, get_db
-from app.routes import auth, technicians, positions, geofences, websocket, reports, geofence_events
+from app.routes import auth, technicians, positions, geofences, websocket, reports
 from app.services.logout_service import LogoutService
 from app.utils.rate_limit import setup_rate_limit, limiter
 from app.services.geofence_service import start_periodic_check
+from app.services.retention_service import start_periodic_retention_cleanup
 
 
 # Configurar logging
@@ -54,15 +55,23 @@ async def lifespan(app: FastAPI):
     # ============================================
     geofence_check_task = asyncio.create_task(start_periodic_check(interval_seconds=60))
 
+    # ============================================
+    # TAREFA PERIÓDICA DE LIMPEZA DE RETENÇÃO DE DADOS
+    # (roda 1x/dia por padrão - configurável via RETENTION_CLEANUP_INTERVAL_HOURS)
+    # ============================================
+    retention_cleanup_task = asyncio.create_task(start_periodic_retention_cleanup())
+
     yield
 
     # Shutdown
     logger.info("Finalizando aplicação...")
     sync_task.cancel()
     geofence_check_task.cancel()
+    retention_cleanup_task.cancel()
     try:
         await sync_task
         await geofence_check_task
+        await retention_cleanup_task
     except asyncio.CancelledError:
         pass
     await close_db()
@@ -139,7 +148,6 @@ app.include_router(positions.router)
 app.include_router(geofences.router)
 app.include_router(websocket.router)
 app.include_router(reports.router)
-app.include_router(geofence_events.router)
 
 
 # ============================================
